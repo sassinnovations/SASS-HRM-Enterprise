@@ -1,0 +1,52 @@
+name: SASS HRM clean-install checks
+on: [push, pull_request]
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - name: Design and release-version parity
+        working-directory: .
+        run: |
+          python scripts/verify-design-parity.py
+          python scripts/test-design-parity.py
+          python scripts/verify-v21-ui.py
+          python scripts/verify-v23-connection.py
+          python scripts/verify-v24-package.py
+      - name: Verify complete MySQL table schema declarations
+        run: |
+          python schema_audit.py --file-only
+          python full_mysql_schema_test.py
+      - run: SASS_HRM_TESTING=1 DB_ENGINE=sqlite JWT_SECRET=test-only-strong-secret-string-0123456789-abcdef python runtime_diagnostics_test.py
+      - run: SASS_HRM_TESTING=1 DB_ENGINE=sqlite JWT_SECRET=test-only-strong-secret-string-0123456789-abcdef python real_baseline_test.py
+      - run: SASS_HRM_TESTING=1 DB_ENGINE=sqlite JWT_SECRET=test-only-strong-secret-string-0123456789-abcdef python admin_developer_test.py
+      - run: SASS_HRM_TESTING=1 DB_ENGINE=sqlite JWT_SECRET=test-only-strong-secret-string-0123456789-abcdef python merged_release_test.py
+      - run: SASS_HRM_TESTING=1 DB_ENGINE=sqlite JWT_SECRET=test-only-strong-secret-string-0123456789-abcdef python culture_suite_test.py
+      - run: SASS_HRM_TESTING=1 DB_ENGINE=sqlite JWT_SECRET=test-only-strong-secret-string-0123456789-abcdef python culture_ops_test.py
+      - run: SASS_HRM_TESTING=1 DB_ENGINE=sqlite JWT_SECRET=test-only-strong-secret-string-0123456789-abcdef python organization_setup_test.py
+      - run: SASS_HRM_TESTING=1 DB_ENGINE=sqlite JWT_SECRET=test-only-strong-secret-string-0123456789-abcdef python talent_ops_test.py
+      - run: SASS_HRM_TESTING=1 DB_ENGINE=sqlite JWT_SECRET=test-only-strong-secret-string-0123456789-abcdef python compensation_ops_test.py
+      - run: SASS_HRM_TESTING=1 DB_ENGINE=sqlite JWT_SECRET=test-only-strong-secret-string-0123456789-abcdef python employee_services_v20_test.py
+      - run: SASS_HRM_TESTING=1 DB_ENGINE=sqlite JWT_SECRET=test-only-strong-secret-string-0123456789-abcdef python route_audit_test.py
+      - run: SASS_HRM_TESTING=1 DB_ENGINE=sqlite JWT_SECRET=test-only-strong-secret-string-0123456789-abcdef python exports_v24_test.py
+      - run: SASS_HRM_TESTING=1 DB_ENGINE=sqlite JWT_SECRET=test-only-strong-secret-string-0123456789-abcdef python accounts_v25_test.py
+      - run: SASS_HRM_TESTING=1 DB_ENGINE=sqlite JWT_SECRET=test-only-strong-secret-string-0123456789-abcdef python mysql_schema_status_test.py
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build

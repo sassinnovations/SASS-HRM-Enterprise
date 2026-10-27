@@ -1,0 +1,17 @@
+.git
+.env
+**/.env
+**/.venv
+**/venv
+**/node_modules
+**/tsconfig.tsbuildinfo
+**/__pycache__
+**/*.pyc
+**/*.db
+**/*.sqlite
+**/*.sqlite3
+**/dist
+backups
+*.zip
+*.log
+*.dump

@@ -1,0 +1,73 @@
+# Local-only full-stack deployment. This is not a public production hosting configuration.
+# Reuses the existing sass_hrm_real project/volume from docker-compose.mysql.yml.
+name: sass_hrm_real
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Run SETUP_SASS_HRM.bat}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?Run SETUP_SASS_HRM.bat}
+      MYSQL_USER: ${MYSQL_USER:?Run SETUP_SASS_HRM.bat}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Run SETUP_SASS_HRM.bat}
+    ports:
+      - "127.0.0.1:3307:3306"
+    volumes:
+      - sass_hrm_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", 'MYSQL_PWD="$$MYSQL_ROOT_PASSWORD" mysqladmin ping -h 127.0.0.1 -uroot --silent']
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+  api:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ./server/.env
+    environment:
+      DB_ENGINE: mysql
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?Missing database configuration}
+      MYSQL_USER: ${MYSQL_USER:?Missing database user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Missing database password}
+      PUBLIC_APP_URL: http://localhost:5173
+      CORS_ORIGINS: http://localhost:5173
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=8).read()"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 45s
+    security_opt:
+      - no-new-privileges:true
+  web:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5173:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 15s
+    security_opt:
+      - no-new-privileges:true
+volumes:
+  sass_hrm_mysql_data:
