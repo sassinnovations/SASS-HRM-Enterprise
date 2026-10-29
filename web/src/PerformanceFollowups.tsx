@@ -1,4 +1,4 @@
-import {hrmFetch} from './apiTransport';
+import {apiUrl,hrmFetch} from './apiTransport';
 import {useCallback,useEffect,useMemo,useState} from 'react';
 import {ClipboardCheck,CalendarRange,ShieldCheck} from 'lucide-react';
 import {useRefreshData} from './useRefreshData';
@@ -12,7 +12,7 @@ type Props={page:'followups'|'reviewprogress';userId:number;role:string;employee
 const today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`};
 async function api<T>(path:string,method='GET',data?:unknown):Promise<T>{
  const token=sessionStorage.getItem('sass_token');
- const r=await hrmFetch('/api/performance-followups'+path,{method,headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},...(data!==undefined?{body:JSON.stringify(data)}:{})});
+ const r=await hrmFetch(apiUrl('/performance-followups'+path),{method,headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},...(data!==undefined?{body:JSON.stringify(data)}:{})});
  let body:any={};try{body=await r.json()}catch{}
  if(!r.ok)throw new Error(typeof body?.detail==='string'?body.detail:`Request failed (HTTP ${r.status})`);
  return body as T;

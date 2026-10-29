@@ -1,8 +1,6 @@
 # SASS HRM: backend regressions + real frontend production build
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-python (Join-Path $PSScriptRoot 'test-docker-stability.py')
-if ($LASTEXITCODE -ne 0) { throw 'Docker/MySQL configuration audit failed.' }
 python (Join-Path $PSScriptRoot 'check-page-routing.py')
 if ($LASTEXITCODE -ne 0) { throw 'Distinct module route validation failed.' }
 python (Join-Path $PSScriptRoot 'verify-design-parity.py')

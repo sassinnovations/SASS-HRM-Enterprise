@@ -12,16 +12,7 @@ $python = Join-Path $server '.venv\Scripts\python.exe'
 & $python -m pip install -r requirements.txt
 if ($LASTEXITCODE -ne 0) { throw 'Backend dependency installation failed. Check the pip error above.' }
 if (-not (Test-Path '.env')) { throw 'Missing server/.env. Run SETUP_SASS_HRM.bat before starting the system.' }
-$config = Get-Content '.env' -Raw
-if ($config -match '(?m)^DB_ENGINE\s*=\s*mysql\s*$') {
-  if ($config -match '(?m)^MYSQL_HOST\s*=\s*127\.0\.0\.1\s*$' -and $config -match '(?m)^MYSQL_PORT\s*=\s*3307\s*$') {
-    Write-Host 'MySQL backend selected: checking Docker database...' -ForegroundColor Cyan
-    & (Join-Path $PSScriptRoot 'start-mysql.ps1')
-    if ($LASTEXITCODE -ne 0) { throw 'Could not start MySQL. Ensure Docker Desktop is running.' }
-  } else {
-    Write-Host 'MySQL backend selected: using the configured external MySQL service.' -ForegroundColor Cyan
-  }
-}
+Write-Host 'MySQL backend selected from server/.env. The API does not start a database.' -ForegroundColor Cyan
 Write-Host 'API health check: http://localhost:8000/api/health' -ForegroundColor Cyan
 Write-Host 'API documentation: http://localhost:8000/docs' -ForegroundColor Cyan
 Write-Host 'Keep this window OPEN while signing in.' -ForegroundColor Yellow

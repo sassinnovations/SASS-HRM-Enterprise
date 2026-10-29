@@ -6,7 +6,7 @@ import json
 ROOT=Path(__file__).resolve().parent.parent
 app=(ROOT/'web/src/App.tsx').read_text(encoding='utf-8')
 registry=(ROOT/'web/src/pageRoutes.ts').read_text(encoding='utf-8')
-nginx=(ROOT/'docker/nginx.conf').read_text(encoding='utf-8')
+hosting=(ROOT/'web/vercel.json').read_text(encoding='utf-8')
 package=json.loads((ROOT/'web/package.json').read_text(encoding='utf-8'))
 
 menu=re.search(r'const menus:MenuItem\[\]=\[(.*?)\];',app,re.S)
@@ -27,6 +27,6 @@ assert 'onClick={()=>window.location.reload()}' not in app,'Redundant reload pag
 assert 'href={pageUrl(m.key)}' in app,'Sidebar entries must be real navigable links'
 assert "if(entry.only==='admin'&&user.role!=='admin')" in app,'Client role guard missing'
 assert "if(key==='developer'&&!user.developer_access)" in app,'Developer role guard missing'
-assert 'try_files $uri $uri/ /index.html' in nginx,'Direct URL refresh must fall back to index.html'
+assert '"destination": "/index.html"' in hosting,'Direct URL refresh must fall back to index.html'
 assert package['version']=='4.5.0','Unexpected frontend version'
 print(f'PASS: {len(paths)} unique feature URLs, single Refresh data, Back/Forward, direct-link fallback, protected settings, and API namespace isolation')

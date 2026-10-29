@@ -1,4 +1,4 @@
-import {hrmFetch} from './apiTransport';
+import {apiUrl,hrmFetch} from './apiTransport';
 import {useRefreshData} from './useRefreshData';
 import React,{useCallback,useEffect,useMemo,useState} from 'react';
 import {UserRound,ShieldCheck,Save,Search,UsersRound,CheckCircle2,ArrowRight,LockKeyhole,Mail,Building2,Phone,FileClock,Trash2,Undo2,ImagePlus} from 'lucide-react';
@@ -14,14 +14,14 @@ function initials(s:string){return s.trim().split(/\s+/).slice(0,2).map(w=>w[0]|
 function dateLabel(date?:string){return date?new Date(date).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}):'Not configured'}
 async function api<T>(path:string,method='GET',payload?:unknown):Promise<T>{
  const token=sessionStorage.getItem('sass_token');
- const response=await hrmFetch('/api'+path,{method,headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},...(payload===undefined?{}:{body:JSON.stringify(payload)})});
+ const response=await hrmFetch(apiUrl(path),{method,headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},...(payload===undefined?{}:{body:JSON.stringify(payload)})});
  const raw=await response.json().catch(()=>null);
  if(!response.ok)throw new Error(typeof raw?.detail==='string'?raw.detail:`Request failed (HTTP ${response.status})`);
  return raw as T;
 }
 async function avatarRequest(path:string,method='GET',body?:Blob):Promise<Response>{
  const token=sessionStorage.getItem('sass_token');
- return hrmFetch('/api'+path,{method,headers:{...(token?{Authorization:`Bearer ${token}`}:{}),...(body?{'Content-Type':body.type}:{})},...(body?{body}:{})});
+ return hrmFetch(apiUrl(path),{method,headers:{...(token?{Authorization:`Bearer ${token}`}:{}),...(body?{'Content-Type':body.type}:{})},...(body?{body}:{})});
 }
 function ProfileAvatar({id,hasPhoto,color,name,small=false,revision=0}:{id:number;hasPhoto?:boolean;color:string;name:string;small?:boolean;revision?:number}){
  const [url,setUrl]=useState('');

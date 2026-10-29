@@ -35,7 +35,11 @@ if len(JWT_SECRET) < 40 or JWT_SECRET.startswith(('REPLACE_', 'LOCAL_DEMO', 'CHA
 JWT_ISSUER = 'sass-hrm-enterprise'
 
 app = FastAPI(title='SASS HRM Enterprise API', version='4.5.0', description='SASS HRMS/HRIS with role-scoped employee assistance')
-app.add_middleware(CORSMiddleware, allow_origins=[x.strip() for x in os.getenv('CORS_ORIGINS', 'http://localhost:5173').split(',')], allow_credentials=True, allow_methods=['*'], allow_headers=['*'])
+_cors_origins=[x.strip() for x in os.getenv('CORS_ORIGINS', 'http://localhost:5173').split(',') if x.strip()]
+_public_app=os.getenv('PUBLIC_APP_URL', '').strip().rstrip('/')
+if _public_app and _public_app not in _cors_origins:
+    _cors_origins.append(_public_app)
+app.add_middleware(CORSMiddleware, allow_origins=_cors_origins, allow_credentials=True, allow_methods=['*'], allow_headers=['*'])
 bearer = HTTPBearer(auto_error=False)
 
 @contextmanager

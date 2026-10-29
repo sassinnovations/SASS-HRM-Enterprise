@@ -1,4 +1,4 @@
-import {hrmFetch} from './apiTransport';
+import {apiUrl,hrmFetch} from './apiTransport';
 import {useCallback,useEffect,useMemo,useState} from 'react';
 import {CalendarRange,ClipboardList,MessageSquareText,ShieldCheck,CheckCircle2} from 'lucide-react';
 import {useRefreshData} from './useRefreshData';
@@ -11,7 +11,7 @@ type Employee={id:number;name:string;manager_id?:number;account_active?:boolean}
 type Props={page:'performancecycles'|'appraisals'|'checkins';userId:number;role:string;employees:Employee[];navigate:(p:string)=>void};
 const today=()=>{const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')};
 async function call<T>(url:string,method='GET',body?:unknown):Promise<T>{
- const token=sessionStorage.getItem('sass_token');const res=await hrmFetch('/api/performance-v2'+url,{method,headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},...(body!==undefined?{body:JSON.stringify(body)}:{})});
+ const token=sessionStorage.getItem('sass_token');const res=await hrmFetch(apiUrl('/performance-v2'+url),{method,headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},...(body!==undefined?{body:JSON.stringify(body)}:{})});
  let content:any={};try{content=await res.json()}catch{}
  if(!res.ok)throw new Error(typeof content?.detail==='string'?content.detail:`Request failed (HTTP ${res.status})`);
  return content as T;

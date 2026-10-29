@@ -1,5 +1,5 @@
 import {AccountSecurityCenter} from './AccountSecurityCenter';
-import {hrmFetch,HRM_CONNECTION_LOST,HRM_CONNECTION_RESTORED,HRM_SESSION_EXPIRED} from './apiTransport';
+import {apiUrl,hrmFetch,HRM_CONNECTION_LOST,HRM_CONNECTION_RESTORED,HRM_SESSION_EXPIRED} from './apiTransport';
 import {PerformanceJournal} from './PerformanceJournal';
 import {PerformanceFollowups} from './PerformanceFollowups';
 import {PerformanceGrowth} from './PerformanceGrowth';
@@ -183,7 +183,7 @@ function AccountAvatar({name,color,size}:{name:string;color?:string;size?:string
    try{
     const token=sessionStorage.getItem('sass_token');
     if(!token){if(active)setUrl('');return}
-    const response=await hrmFetch('/api/profile/me/photo',{headers:{Authorization:`Bearer ${token}`}});
+    const response=await hrmFetch(apiUrl('/profile/me/photo'),{headers:{Authorization:`Bearer ${token}`}});
     if(!response.ok){if(current){URL.revokeObjectURL(current);current=''}if(active)setUrl('');return}
     const next=URL.createObjectURL(await response.blob());
     if(!active){URL.revokeObjectURL(next);return}

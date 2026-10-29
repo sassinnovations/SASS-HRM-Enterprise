@@ -9,10 +9,7 @@ args=parser.parse_args()
 
 ROOT=Path(__file__).resolve().parent.parent
 if args.workspace:
-    dockerignore=(ROOT/'.dockerignore').read_text(encoding='utf-8')
     gitignore=(ROOT/'.gitignore').read_text(encoding='utf-8')
-    for name in ('.env','**/.env','**/node_modules','**/dist'):
-        assert name in dockerignore, f'Docker ignore missing {name}'
     for name in ('.env','node_modules','dist'):
         assert name in gitignore, f'Git ignore missing {name}'
 else:
@@ -26,8 +23,9 @@ if not args.workspace:
 config=json.loads((ROOT/'web/package.json').read_text())
 lock=json.loads((ROOT/'web/package-lock.json').read_text())
 assert config['version']==lock['version']==lock['packages']['']['version']=='4.5.0'
-assert 'npm ci' in (ROOT/'docker/frontend.Dockerfile').read_text()
 assert 'npm ci' in (ROOT/'scripts/start-frontend.ps1').read_text()
+assert (ROOT/'web/vercel.json').is_file()
+assert (ROOT/'railway.toml').is_file()
 assert (ROOT/'REPAIR_FRONTEND.bat').is_file()
 assert (ROOT/'server/exports_v24_test.py').is_file()
 assert (ROOT/'docs/V2_4_SECURITY_EXPORT_RELEASE.md').is_file()

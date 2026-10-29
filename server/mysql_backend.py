@@ -24,12 +24,18 @@ def raw_mysql_connection():
         import pymysql
     except ImportError as e:
         raise RuntimeError('MySQL driver missing. Run: pip install -r requirements.txt') from e
+    # MYSQL_* is the app's own config. MYSQLHOST-style names are Railway's MySQL plugin references.
+    host = os.getenv('MYSQL_HOST') or os.getenv('MYSQLHOST') or '127.0.0.1'
+    port = os.getenv('MYSQL_PORT') or os.getenv('MYSQLPORT') or '3306'
+    user = os.getenv('MYSQL_USER') or os.getenv('MYSQLUSER') or 'sass_hrm_app'
+    password = os.getenv('MYSQL_PASSWORD', os.getenv('MYSQLPASSWORD', ''))
+    database = os.getenv('MYSQL_DATABASE') or os.getenv('MYSQLDATABASE') or 'sass_hrm'
     return pymysql.connect(
-        host=os.getenv('MYSQL_HOST', '127.0.0.1'),
-        port=int(os.getenv('MYSQL_PORT', '3307')),
-        user=os.getenv('MYSQL_USER', 'sass_hrm_app'),
-        password=os.getenv('MYSQL_PASSWORD', ''),
-        database=os.getenv('MYSQL_DATABASE', 'sass_hrm'),
+        host=host,
+        port=int(port),
+        user=user,
+        password=password,
+        database=database,
         charset='utf8mb4',
         connect_timeout=8,
         read_timeout=30,

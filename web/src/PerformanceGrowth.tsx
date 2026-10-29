@@ -1,4 +1,4 @@
-import {hrmFetch} from './apiTransport';
+import {apiUrl,hrmFetch} from './apiTransport';
 import {useCallback,useEffect,useMemo,useState} from 'react';
 import {BookOpenCheck,MessageSquareMore,ShieldCheck} from 'lucide-react';
 import {useRefreshData} from './useRefreshData';
@@ -12,7 +12,7 @@ type Props={page:'growthplans'|'feedbackrequests';userId:number;role:string;empl
 const today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`};
 async function api<T>(path:string,method='GET',data?:unknown):Promise<T>{
  const token=sessionStorage.getItem('sass_token');
- const response=await hrmFetch('/api/performance-growth'+path,{method,headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},...(data!==undefined?{body:JSON.stringify(data)}:{})});
+ const response=await hrmFetch(apiUrl('/performance-growth'+path),{method,headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},...(data!==undefined?{body:JSON.stringify(data)}:{})});
  let parsed:any={};try{parsed=await response.json()}catch{}
  if(!response.ok)throw new Error(typeof parsed?.detail==='string'?parsed.detail:`Request failed: HTTP ${response.status}`);
  return parsed as T;

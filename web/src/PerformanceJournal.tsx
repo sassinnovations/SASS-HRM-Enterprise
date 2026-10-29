@@ -1,4 +1,4 @@
-import {hrmFetch} from './apiTransport';
+import {apiUrl,hrmFetch} from './apiTransport';
 import {useCallback,useEffect,useMemo,useState} from 'react';
 import {BookOpenCheck,NotebookPen,ShieldCheck} from 'lucide-react';
 import {useRefreshData} from './useRefreshData';
@@ -11,7 +11,7 @@ type Props={page:'evidence'|'goaljournal';userId:number;role:string;navigate:(pa
 const localToday=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`};
 async function request<T>(endpoint:string,method='GET',data?:unknown):Promise<T>{
  const token=sessionStorage.getItem('sass_token');
- const res=await hrmFetch('/api'+endpoint,{method,headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},...(data===undefined?{}:{body:JSON.stringify(data)})});
+ const res=await hrmFetch(apiUrl(endpoint),{method,headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},...(data===undefined?{}:{body:JSON.stringify(data)})});
  let result:any={};try{result=await res.json()}catch{}
  if(!res.ok)throw new Error(typeof result?.detail==='string'?result.detail:`Request failed (HTTP ${res.status})`);
  return result as T;
