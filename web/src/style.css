@@ -436,3 +436,9 @@ body { background: var(--sass-page); color: var(--sass-text); }
 .sass-connectivity-warning{border-left:4px solid #e19c35;margin:8px 18px 12px;}
 .sass-session-message{background:#fff6e8;border:1px solid #e9c997;border-radius:10px;padding:12px;color:#76501b;line-height:1.5;}
 @media (max-width:650px){.sass-connectivity-warning{margin:8px 10px 12px;}}
+
+/* The menu stays fixed. Only the open screen scrolls, and it always starts at the top. */
+.shell{height:100vh;min-height:0;overflow:hidden}
+.main-area{height:100vh;min-height:0;overflow:hidden}
+.topbar{position:relative;top:auto}
+.content{min-height:0;overflow:auto}

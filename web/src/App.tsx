@@ -13,7 +13,7 @@ import {WorkspaceControl} from './WorkspaceControl';
 import {SelfServiceHub} from './SelfServiceHub';
 import {PAGE_ROUTES,pageUrl,pageFromPath} from './pageRoutes';
 import {EmployeeServiceOperations,WorkspacePreferences,AICapabilities} from './EmployeeServicesV20';
-import React, {useCallback, useEffect, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useLayoutEffect, useRef, useState} from 'react';
 import {
   Activity, ArrowDownLeft, ArrowDownRight, ArrowRight, ArrowUpRight, BarChart3, Bell,
   BookOpen, Bot, BriefcaseBusiness, CalendarDays, CalendarCheck2, Check, CheckCircle2,
@@ -383,6 +383,7 @@ function DeveloperConsole(){
 function App(){
  const [user,setUser]=useState<Rec|null>(null);const [checking,setChecking]=useState(true);
  const [page,setPage]=useState(()=>pageFromPath(window.location.pathname)||'dashboard');const[mobileMenu,setMobileMenu]=useState(false);
+ const contentRef=useRef<HTMLElement|null>(null);
  const [routeError,setRouteError]=useState<{kind:'not-found'|'forbidden';path:string;label:string}|null>(null);
  const [data,setData]=useState<Record<string,Rec[]>>({});const [privateProfile,setPrivateProfile]=useState<Rec>({});const[report,setReport]=useState<Rec|null>(null);
  const [dialog,setDialog]=useState<Dialog|null>(null);const[busy,setBusy]=useState(false);
@@ -459,8 +460,12 @@ function App(){
  const applyPage=(key:string)=>{
   setRouteError(null);setPage(key);setSearch('');setNavFilter('');setMobileMenu(false);
   setDialog(null);setSelectedTicket(null);setNotificationsOpen(false);setWorkspaceOpen(false);
-  window.scrollTo(0,0);
+  contentRef.current?.scrollTo(0,0);
  };
+ useLayoutEffect(()=>{
+  if('scrollRestoration' in history) history.scrollRestoration='manual';
+  contentRef.current?.scrollTo(0,0);
+ },[page]);
  // All module buttons and cards navigate through the same address-bar router.
  const setActive=(key:string)=>{
   if(!canOpenPage(key)){notify('You do not have permission to open this feature.','error');return;}
@@ -619,7 +624,7 @@ function App(){
  </aside>
  {mobileMenu&&<button aria-label="Close navigation" className="mobile-backdrop" onClick={()=>setMobileMenu(false)}/>}
  <div className="main-area"><header className="topbar"><div className="breadcrumb"><button className="mobile-toggle" aria-label="Open menu" onClick={()=>setMobileMenu(true)}><Menu size={21}/></button><a href={pageUrl('dashboard')} className="sass-breadcrumb-link" onClick={e=>{if(e.button!==0||e.ctrlKey||e.metaKey||e.shiftKey||e.altKey)return;e.preventDefault();setActive('dashboard')}}>Workspace</a><ChevronRight size={15}/><strong>{title}</strong></div><div className="top-actions"><button type="button" className="sass-search-top-link" title="Find HR records" onClick={()=>setActive('globalsearch')}><Search size={16}/><span>Find records</span></button><button type="button" className="sass-refresh-workspace" aria-label="Refresh data" aria-busy={loadingData} title="Refresh data for this page and the workspace" onClick={()=>void refreshCurrentPage()} disabled={loadingData}><Activity size={16}/><span>Refresh data</span></button><span className="top-date"><CalendarDays size={16}/>{new Date().toLocaleDateString('en-IN',{month:'short',day:'numeric',year:'numeric'})}</span><div className="notifications-wrap"><button className="icon-button notification-button" aria-label="Notifications" onClick={()=>setNotificationsOpen(v=>!v)}><Bell size={19}/>{unread>0&&<span className="notification-indicator"/>}</button>{notificationsOpen&&<div className="notification-popover"><h3>Notifications</h3><button type="button" onClick={()=>setActive('inbox')}><span><strong>Open notification inbox →</strong><small>Manage all, unread and archived alerts</small></span></button>{rowsFor('notifications').length?rowsFor('notifications').map(n=><button key={n.id} onClick={()=>action(`/notifications/${n.id}/read`,'PATCH',undefined,'Notification marked read')}><span className={`notification-dot ${n.is_read?'read':''}`}/><span><strong>{n.title}</strong><small>{n.body}</small></span></button>):<p>You're all caught up.</p>}</div>}</div><div className="top-divider"/><button type="button" className="profile-top-button" title="Open my profile" aria-label="Open my profile" onClick={()=>setActive('profile')}><AccountAvatar name={person.name} color={person.avatar_color}/></button></div></header>
- <main className="content"><div className="page-content">
+ <main className="content" ref={contentRef}><div className="page-content" key={page}>
  {connectionIssue&&<div className="data-error-banner sass-connectivity-warning" role="alert"><CircleHelp size={18}/><span>Cannot reach the API reliably. Saved records may be out of date. Verify Docker and MySQL are running; use the single Refresh data button when the connection returns. Do not re-submit a form until its previous result is confirmed.</span></div>}
  {lastSync&&<div className="sass-sync-note" role="status">Workspace last checked at {lastSync}{loadFailures.length>0?' · Some sources need attention':''}</div>}
  {loadFailures.length>0&&<div className="data-error-banner" role="alert"><CircleHelp size={18}/><span>{loadFailures.length} workspace data source(s) could not load: {loadFailures.slice(0,4).join(', ')}. Some tables may be incomplete. Use Refresh data above to retry.</span></div>}
