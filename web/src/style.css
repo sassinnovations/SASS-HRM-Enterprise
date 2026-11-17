@@ -417,8 +417,9 @@ body { background: var(--sass-page); color: var(--sass-text); }
 .saved-login-accounts select{flex:1;min-width:0;padding:12px;border:1px solid #dce3f3;border-radius:12px;background:white;color:#21304e}
 .saved-login-accounts button{border:1px solid #dce3f3;border-radius:10px;background:#f7f8fd;padding:10px;color:#4755ad;cursor:pointer;font-weight:700}
 .saved-login-accounts small{font-size:11px;color:#7785a1}
-.remember-account{display:flex!important;align-items:center;gap:9px;margin:12px 0 6px;font-size:12px!important;color:#566682!important;font-weight:500!important}
-.remember-account input{width:15px!important;height:15px!important;min-height:0!important;flex:none;accent-color:#5863ed}
+.remember-account{display:flex!important;flex-direction:row!important;align-items:center;gap:9px;margin:12px 0 6px;font-size:12px!important;color:#566682!important;font-weight:500!important;line-height:1.4}
+.remember-account input{width:15px!important;height:15px!important;min-height:0!important;margin:0;padding:0!important;border:0!important;border-radius:3px;box-shadow:none!important;flex:none;accent-color:#5863ed}
+.remember-account span{min-width:0}
 
 /* Explicit deep-link errors, keeping an invalid/restricted URL visible. */
 .sass-route-panel{display:flex;gap:22px;align-items:flex-start;max-width:810px;margin:32px auto;padding:32px;border:1px solid var(--border,#e3e5ed);border-radius:18px;background:var(--surface,#fff);box-shadow:0 8px 24px rgba(26,25,56,.05)}
