@@ -6,6 +6,7 @@ import {
   AlertTriangle, CheckCircle2, DoorOpen, ClipboardList, Workflow, Search, Pencil, Plus, X
 } from 'lucide-react'
 import './talent-tools.css'
+import {HiringPipeline} from './HiringPipeline';
 
 type Row=Record<string,any>
 
@@ -284,7 +285,6 @@ export function TalentTools({page,isHR,management,userId,candidates,employees,ti
   })()
 
   const renderRecruitment=()=>{
-    const stageCounts=['Applied','Screening','Assessment','Interview','Offer','Hired','Rejected'].map(stage=>({stage,total:count(candidates,x=>x.stage===stage)}))
     return <>
       <div className="talent-split">
         <section className="talent-panel">
@@ -298,7 +298,7 @@ export function TalentTools({page,isHR,management,userId,candidates,employees,ti
         </section>
         <section className="talent-panel">
           <div className="talent-panel-head"><h4>Hiring layout</h4><p>Quick stage overview and open role snapshot.</p></div>
-          <div className="talent-stage-grid">{stageCounts.map(s=><div className="talent-stat-tile" key={s.stage}><span>{s.stage}</span><strong>{s.total}</strong></div>)}</div>
+          <HiringPipeline candidates={candidates} jobs={jobs} isHR={isHR} management={management} refreshCore={refreshCore}/>
           <div className="talent-subgrid two">
             <div className="talent-mini-panel"><h5>Open roles</h5>{jobs.filter(j=>j.status==='Open').length?filter(jobs,['title','department','location']).filter(j=>j.status==='Open').slice(0,6).map(j=><div className="talent-mini-row" key={j.id}><div><strong>{j.title}</strong><small>{j.department} · {j.location}</small></div><span>{j.openings} open</span></div>):<div className="talent-empty">No active job openings.</div>}</div>
             <div className="talent-mini-panel"><h5>Interview readiness</h5><ul className="talent-point-list"><li>{count(candidates,x=>x.stage==='Interview')} candidates currently need interview follow-up.</li><li>{count(candidates,x=>x.stage==='Offer')} candidates are in the offer stage.</li><li>{count(candidates,x=>x.stage==='Screening'||x.stage==='Assessment')} candidates are still mid-pipeline.</li></ul></div>

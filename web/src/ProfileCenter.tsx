@@ -1,11 +1,13 @@
-import {apiUrl,hrmFetch} from './apiTransport';
+import {hrmFetch,HRM_SESSION_EXPIRED} from './apiTransport';
 import {useRefreshData} from './useRefreshData';
 import React,{useCallback,useEffect,useMemo,useState} from 'react';
-import {UserRound,ShieldCheck,Save,Search,UsersRound,CheckCircle2,ArrowRight,LockKeyhole,Mail,Building2,Phone,FileClock,Trash2,Undo2,ImagePlus} from 'lucide-react';
+import {UserRound,ShieldCheck,Save,Search,UsersRound,CheckCircle2,ArrowRight,LockKeyhole,Mail,Building2,Phone,FileClock,Trash2,Undo2,ImagePlus,Pencil} from 'lucide-react';
 import './profile-center.css';
 
 type Profile={id:number;code:string;name:string;email:string;role:string;designation:string;department:string;location:string;work_mode:string;join_date:string;manager_id:number|null;preferred_name:string;headline:string;biography:string;work_phone:string;timezone:string;language:string;directory_visible:number|boolean;avatar_color:string;has_photo?:boolean;work_email?:string;profile_updated_at:string};
 type Row=Record<string,any>;
+type OfficialDraft={code:string;name:string;work_email:string;designation:string;department:string;location:string;work_mode:string;join_date:string;change_reason:string};
+function officialFromProfile(p:Profile):OfficialDraft{return {code:p.code,name:p.name,work_email:p.work_email||p.email,designation:p.designation,department:p.department,location:p.location,work_mode:p.work_mode,join_date:p.join_date.slice(0,10),change_reason:''}}
 type Draft={preferred_name:string;headline:string;biography:string;work_phone:string;timezone:string;language:string;directory_visible:boolean;avatar_color:string};
 const defaultDraft:Draft={preferred_name:'',headline:'',biography:'',work_phone:'',timezone:'Asia/Kolkata',language:'en',directory_visible:true,avatar_color:'#3C6DF0'};
 const timezones=['Asia/Kolkata','Asia/Dubai','America/New_York','America/Chicago','America/Los_Angeles','Europe/London','Europe/Berlin','Australia/Sydney','UTC'];
@@ -14,14 +16,14 @@ function initials(s:string){return s.trim().split(/\s+/).slice(0,2).map(w=>w[0]|
 function dateLabel(date?:string){return date?new Date(date).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}):'Not configured'}
 async function api<T>(path:string,method='GET',payload?:unknown):Promise<T>{
  const token=sessionStorage.getItem('sass_token');
- const response=await hrmFetch(apiUrl(path),{method,headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},...(payload===undefined?{}:{body:JSON.stringify(payload)})});
+ const response=await hrmFetch('/api'+path,{method,headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},...(payload===undefined?{}:{body:JSON.stringify(payload)})});
  const raw=await response.json().catch(()=>null);
  if(!response.ok)throw new Error(typeof raw?.detail==='string'?raw.detail:`Request failed (HTTP ${response.status})`);
  return raw as T;
 }
 async function avatarRequest(path:string,method='GET',body?:Blob):Promise<Response>{
  const token=sessionStorage.getItem('sass_token');
- return hrmFetch(apiUrl(path),{method,headers:{...(token?{Authorization:`Bearer ${token}`}:{}),...(body?{'Content-Type':body.type}:{})},...(body?{body}:{})});
+ return hrmFetch('/api'+path,{method,headers:{...(token?{Authorization:`Bearer ${token}`}:{}),...(body?{'Content-Type':body.type}:{})},...(body?{body}:{})});
 }
 function ProfileAvatar({id,hasPhoto,color,name,small=false,revision=0}:{id:number;hasPhoto?:boolean;color:string;name:string;small?:boolean;revision?:number}){
  const [url,setUrl]=useState('');
@@ -42,6 +44,9 @@ function Notice({text,error=false}:{text:string;error?:boolean}){return text?<di
 function Field({title,children}:{title:string;children:React.ReactNode}){return <label className="profile-field"><span>{title}</span>{children}</label>}
 export function MyProfile({navigate,onSaved}:{navigate:(page:string)=>void;onSaved:()=>Promise<void>}){
  const [profile,setProfile]=useState<Profile|null>(null);
+ const [editingOfficial,setEditingOfficial]=useState(false);
+ const [officialDraft,setOfficialDraft]=useState<OfficialDraft|null>(null);
+ const [officialBusy,setOfficialBusy]=useState(false);
  const [draft,setDraft]=useState<Draft>(defaultDraft);
  const [directory,setDirectory]=useState<Row[]>([]);
  const [requests,setRequests]=useState<Row[]>([]);
@@ -77,6 +82,24 @@ export function MyProfile({navigate,onSaved}:{navigate:(page:string)=>void;onSav
   try{const r=await avatarRequest('/profile/me/optional','DELETE');if(!r.ok)throw new Error('Unable to reset optional profile');await load();setPictureRevision(n=>n+1);window.dispatchEvent(new Event('sass-hrm:profile-photo-changed'));setSuccess('Optional profile information and photo cleared. Your official HR record remains unchanged.');}
   catch(e){setError((e as Error).message)}finally{setSaving(false)}
  }
+ const beginOfficialEdit=()=>{if(!profile||profile.role!=='admin')return;setOfficialDraft(officialFromProfile(profile));setEditingOfficial(true);setError('');setSuccess('')};
+ const cancelOfficialEdit=()=>{setEditingOfficial(false);setOfficialDraft(null)};
+ async function saveOfficial(e:React.FormEvent){e.preventDefault();
+  if(!profile||profile.role!=='admin'||!officialDraft)return;
+  const changingEmail=officialDraft.work_email.trim().toLowerCase()!==(profile.work_email||profile.email).toLowerCase();
+  if(changingEmail&&!window.confirm('Changing your work email will sign out your current session. Save and sign in again with the updated work email?'))return;
+  setOfficialBusy(true);setError('');setSuccess('');
+  try{
+   const result=await api<{sessions_revoked:boolean}>(`/admin/accounts/${profile.id}/profile`,'PATCH',{
+    ...officialDraft,email:profile.email
+   });
+   if(result.sessions_revoked){window.dispatchEvent(new Event(HRM_SESSION_EXPIRED));return}
+   const refreshed=await api<Profile>('/profile/me');
+   setProfile(refreshed);setDirectory(await api<Row[]>('/profile/directory'));
+   cancelOfficialEdit();await onSaved();
+   setSuccess('Official work details saved to your employee record. Changes are audited.');
+  }catch(e){setError((e as Error).message)}finally{setOfficialBusy(false)}
+ }
  const visible=useMemo(()=>directory.filter(p=>`${p.name} ${p.preferred_name} ${p.department} ${p.designation} ${p.headline}`.toLowerCase().includes(filter.toLowerCase())),[directory,filter]);
  async function save(e:React.FormEvent){e.preventDefault();setSaving(true);setSuccess('');setError('');
   try{const result=await api<Profile>('/profile/me','PUT',draft);setProfile(result);await onSaved();setSuccess('Professional profile saved. Directory visibility changes take effect immediately.');setDirectory(await api<Row[]>('/profile/directory'))}catch(e){setError((e as Error).message)}finally{setSaving(false)}
@@ -101,7 +124,19 @@ export function MyProfile({navigate,onSaved}:{navigate:(page:string)=>void;onSav
     <div className="profile-colors"><span>Avatar color</span><div>{colors.map(c=><button key={c} type="button" style={{background:c}} className={draft.avatar_color.toUpperCase()===c.toUpperCase()?'selected':''} aria-label={`Use avatar color ${c}`} onClick={()=>setDraft(d=>({...d,avatar_color:c}))}/>)}</div></div>
     <label className="profile-toggle"><input type="checkbox" checked={draft.directory_visible} onChange={e=>setDraft(d=>({...d,directory_visible:e.target.checked}))}/><span><strong>Show my professional profile in the staff directory</strong><small>Disabling this hides your optional professional profile details from colleagues. HR can still administer your employee record.</small></span></label>
     <div className="profile-edit-actions"><button type="submit" disabled={saving} className="profile-primary"><Save size={16}/> {saving?'Saving…':'Save profile changes'}</button><button type="button" className="profile-ghost" disabled={saving} onClick={restoreDraft}><Undo2 size={16}/> Discard unsaved edits</button></div>
-   </form><div className="profile-reset"><p>Want to remove optional professional information? This will not remove your login, work email, role, or HR records.</p><button type="button" className="profile-ghost danger" disabled={saving} onClick={()=>void clearOptional()}><Trash2 size={16}/> Delete optional profile details</button></div></section><aside className="profile-card"><div className="profile-card-heading"><h3>Official work details</h3><span>HR managed</span></div><div className="profile-details">{[['Employee code',profile.code],['Official name',profile.name],['Work email',profile.work_email||profile.email],['Role',profile.role],['Department',profile.department],['Designation',profile.designation],['Office',profile.location],['Work mode',profile.work_mode],['Joined',dateLabel(profile.join_date)]].map(([label,value])=><div key={label}><span>{label}</span><strong>{value||'—'}</strong></div>)}</div><div className="profile-note"><LockKeyhole size={19}/> Official employment fields require HR authorization. Profile settings cannot change JWT roles or account passwords.</div><div className="profile-shortcuts"><button onClick={()=>navigate('settings')}><ShieldCheck size={16}/> Password and security <ArrowRight size={16}/></button><button onClick={()=>navigate('privateprofile')}><Phone size={16}/> Private emergency contacts <ArrowRight size={16}/></button></div></aside></div>}
+   </form><div className="profile-reset"><p>Want to remove optional professional information? This will not remove your login, work email, role, or HR records.</p><button type="button" className="profile-ghost danger" disabled={saving} onClick={()=>void clearOptional()}><Trash2 size={16}/> Delete optional profile details</button></div></section><aside className="profile-card"><div className="profile-card-heading"><h3>Official work details</h3>{profile.role==='admin'?<button type="button" className="profile-ghost profile-official-trigger" disabled={officialBusy} onClick={editingOfficial?cancelOfficialEdit:beginOfficialEdit}>{editingOfficial?<><Undo2 size={15}/> Cancel</>:<><Pencil size={15}/> Edit official details</>}</button>:<span>HR managed</span>}</div>
+   {editingOfficial&&officialDraft? <form className="profile-form profile-official-form" onSubmit={saveOfficial} aria-label="Edit official work details">
+    <div className="profile-fields-two"><Field title="Employee code"><input required minLength={3} maxLength={50} pattern="[A-Za-z0-9][A-Za-z0-9._-]*" value={officialDraft.code} onChange={e=>setOfficialDraft(d=>d&&({...d,code:e.target.value}))}/></Field><Field title="Official name"><input required minLength={2} maxLength={100} value={officialDraft.name} onChange={e=>setOfficialDraft(d=>d&&({...d,name:e.target.value}))}/></Field>
+    <Field title="Work email"><input type="email" required maxLength={200} value={officialDraft.work_email} onChange={e=>setOfficialDraft(d=>d&&({...d,work_email:e.target.value}))}/></Field><Field title="Role (security-managed)"><input value={profile.role} readOnly aria-readonly="true" title="Role changes require separate account administration"/></Field>
+    <Field title="Department"><input required minLength={2} maxLength={100} value={officialDraft.department} onChange={e=>setOfficialDraft(d=>d&&({...d,department:e.target.value}))}/></Field><Field title="Designation"><input required minLength={2} maxLength={120} value={officialDraft.designation} onChange={e=>setOfficialDraft(d=>d&&({...d,designation:e.target.value}))}/></Field>
+    <Field title="Office"><input required minLength={2} maxLength={100} value={officialDraft.location} onChange={e=>setOfficialDraft(d=>d&&({...d,location:e.target.value}))}/></Field><Field title="Work mode"><select value={officialDraft.work_mode} onChange={e=>setOfficialDraft(d=>d&&({...d,work_mode:e.target.value}))}><option value="On-site">On-site</option><option value="Hybrid">Hybrid</option><option value="Remote">Remote</option></select></Field>
+    <Field title="Joined"><input type="date" required value={officialDraft.join_date} onChange={e=>setOfficialDraft(d=>d&&({...d,join_date:e.target.value}))}/></Field></div>
+    <Field title="Reason for HR change"><textarea required minLength={6} maxLength={450} rows={3} value={officialDraft.change_reason} onChange={e=>setOfficialDraft(d=>d&&({...d,change_reason:e.target.value}))} placeholder="Briefly explain why the official record is being corrected"/></Field>
+    <p className="profile-helper">Only HR administrators may save these changes. Your sign-in email and access role are security-managed separately. Changing your work email ends previous sessions.</p>
+    <div className="profile-edit-actions"><button type="submit" className="profile-primary" disabled={officialBusy}><Save size={16}/>{officialBusy?'Saving…':'Save official details'}</button><button type="button" className="profile-ghost" disabled={officialBusy} onClick={cancelOfficialEdit}>Cancel</button></div>
+   </form>:<div className="profile-details">{[['Employee code',profile.code],['Official name',profile.name],['Work email',profile.work_email||profile.email],['Role',profile.role],['Department',profile.department],['Designation',profile.designation],['Office',profile.location],['Work mode',profile.work_mode],['Joined',dateLabel(profile.join_date)]].map(([label,value])=><div key={label}><span>{label}</span><strong>{value||'—'}</strong></div>)}</div>}
+   <div className="profile-note"><LockKeyhole size={19}/> Official employment fields require HR authorization. To change an account role, use Account administration; password changes are separate.</div>{profile.role==='admin'&&<div className="profile-shortcuts"><button type="button" onClick={()=>navigate('accounts')}><ShieldCheck size={16}/> Manage account roles <ArrowRight size={16}/></button></div>}
+   <div className="profile-shortcuts"><button onClick={()=>navigate('settings')}><ShieldCheck size={16}/> Password and security <ArrowRight size={16}/></button><button onClick={()=>navigate('privateprofile')}><Phone size={16}/> Private emergency contacts <ArrowRight size={16}/></button></div></aside></div>}
   {tab==='directory'&&<section className="profile-card"><div className="profile-card-heading"><h3>Colleague directory</h3><span>{visible.length} visible</span></div><label className="profile-search"><Search size={17}/><input aria-label="Search professional directory" value={filter} onChange={e=>setFilter(e.target.value)} placeholder="Search by name, team or designation"/></label><div className="profile-directory">{visible.map(p=><article key={p.id}><ProfileAvatar id={p.id} hasPhoto={!!p.has_photo} color={p.avatar_color} name={p.preferred_name||p.name} small revision={pictureRevision}/><div><strong>{p.preferred_name||p.name}</strong><small>{p.designation} · {p.department}</small>{p.headline&&<p>{p.headline}</p>}{p.work_phone&&<small><Phone size={12}/> {p.work_phone}</small>}</div></article>)}{visible.length===0&&<div className="profile-empty">No matching profiles. Colleagues who opted out are not displayed.</div>}</div></section>}
   {tab==='corrections'&&<div className="profile-two-col"><section className="profile-card"><div className="profile-card-heading"><h3>Request an official name correction</h3><span>HR approval required</span></div><p className="profile-helper">This updates your legal/workforce display name only if HR approves it. For work-email changes, contact your HR administrator.</p><form className="profile-form" onSubmit={sendCorrection}><Field title="Requested official name"><input required minLength={2} maxLength={100} value={correction.requested_value} onChange={e=>setCorrection(d=>({...d,requested_value:e.target.value}))}/></Field><Field title="Reason for correction"><textarea rows={4} required minLength={6} maxLength={450} value={correction.reason} onChange={e=>setCorrection(d=>({...d,reason:e.target.value}))}/></Field><button className="profile-primary" disabled={saving}><Mail size={16}/> Submit for HR review</button></form></section><section className="profile-card"><div className="profile-card-heading"><h3>My requests</h3><span>{requests.length}</span></div><div className="profile-request-list">{requests.map(r=><div key={r.id}><strong>{r.requested_value}</strong><span className={'profile-pill '+r.status.toLowerCase()}>{r.status}</span><small>{dateLabel(r.requested_at)} · Official name</small>{r.review_note&&<p>HR note: {r.review_note}</p>}</div>)}{!requests.length&&<div className="profile-empty">No change requests yet.</div>}</div></section></div>}
  </div>

@@ -16,7 +16,7 @@ from email.message import EmailMessage
 from typing import Literal
 
 from fastapi import Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from main import app, audit, current_user, db, hash_password, require_hr, DB_ENGINE
 
@@ -318,6 +318,10 @@ def admin_set_password(employee_id:int, body:SetAccountPassword, actor=Depends(r
 
 
 class AccountProfileEdit(BaseModel):
+    # Backwards-compatible: older Account Administration forms send only the original fields.
+    # HR can additionally correct staff code / join date; account role and password are not
+    # accepted here and remain protected by their dedicated administration endpoints.
+    model_config = ConfigDict(extra='forbid')
     name: str = Field(min_length=2,max_length=100)
     email: str = Field(min_length=6,max_length=200)
     work_email: str = Field(min_length=6,max_length=200)
@@ -325,11 +329,15 @@ class AccountProfileEdit(BaseModel):
     department: str = Field(min_length=2,max_length=100)
     location: str = Field(min_length=2,max_length=100)
     work_mode: Literal['Remote','Hybrid','On-site'] = 'Hybrid'
+    code: str | None = Field(default=None,min_length=3,max_length=50)
+    join_date: date | None = None
+    change_reason: str = Field(default='',max_length=450)
 
 
 @app.patch('/api/admin/accounts/{employee_id}/profile')
 def admin_edit_account_profile(employee_id: int, body: AccountProfileEdit, actor=Depends(require_hr)):
-    # Identity edits never accept passwords or roles.
+    # This is an HR-admin-only edit. No change to the primary database ID, password,
+    # security tier, or access role is accepted. Editing work email revokes JWT sessions.
     email=body.email.strip().lower()
     work_email=body.work_email.strip().lower()
     if not EMAIL.fullmatch(email) or not EMAIL.fullmatch(work_email):
@@ -337,20 +345,41 @@ def admin_edit_account_profile(employee_id: int, body: AccountProfileEdit, actor
     items=[body.name.strip(),body.designation.strip(),body.department.strip(),body.location.strip()]
     if any(len(x)<2 for x in items):
         raise HTTPException(422,'Account profile fields must contain at least two characters')
+    code=body.code.strip() if body.code is not None else None
+    if code is not None and not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{2,49}',code):
+        raise HTTPException(422,'Employee code must use 3–50 letters, numbers, dots, underscores or hyphens')
+    reason=body.change_reason.strip()
+    if body.join_date is not None and not isinstance(body.join_date,date):
+        raise HTTPException(422,'Select a valid joining date')
     with db() as conn:
-        old=conn.execute('SELECT id,email,work_email FROM employees WHERE id=?',(employee_id,)).fetchone()
+        old=conn.execute('''SELECT id,code,name,email,work_email,designation,department,
+                   location,work_mode,join_date FROM employees WHERE id=?''',(employee_id,)).fetchone()
         if old is None:
             raise HTTPException(404,'Account not found')
+        next_code=code if code is not None else old['code']
+        next_joined=body.join_date.isoformat() if body.join_date is not None else str(old['join_date'])
+        if (next_code!=old['code'] or next_joined!=str(old['join_date'])) and len(reason)<6:
+            raise HTTPException(422,'Provide a reason (at least 6 characters) when changing employee code or joining date')
+        if next_code != old['code']:
+            duplicate_code=conn.execute('''SELECT id FROM employees WHERE id<>? AND lower(code)=lower(?) LIMIT 1''',
+                                        (employee_id,next_code)).fetchone()
+            if duplicate_code:
+                raise HTTPException(409,'Employee code already belongs to another employee')
         clash=conn.execute('''SELECT id FROM employees WHERE id<>? AND
             (lower(email) IN (?,?) OR lower(work_email) IN (?,?)) LIMIT 1''',
             (employee_id,email,work_email,email,work_email)).fetchone()
         if clash:
             raise HTTPException(409,'Sign-in or work email belongs to another account')
-        login_changed=(old['email']!=email or (old['work_email'] or old['email'])!=work_email)
-        conn.execute('''UPDATE employees SET name=?,email=?,work_email=?,designation=?,department=?,
-            location=?,work_mode=?,session_version=session_version+? WHERE id=?''',
-            (items[0],email,work_email,items[1],items[2],items[3],body.work_mode,int(login_changed),employee_id))
-        changed=['name','email','work_email','designation','department','location','work_mode']
+        updates={'code':next_code,'name':items[0],'email':email,'work_email':work_email,
+                 'designation':items[1],'department':items[2], 'location':items[3],
+                 'work_mode':body.work_mode,'join_date':next_joined}
+        changed=[key for key,value in updates.items() if str(old[key] if old[key] is not None else '')!=str(value)]
+        if not changed:
+            return {'id':employee_id,'message':'No official details changed','sessions_revoked':False,'changed_fields':[]}
+        login_changed=('email' in changed or 'work_email' in changed)
+        conn.execute('''UPDATE employees SET code=?,name=?,email=?,work_email=?,designation=?,department=?,
+            location=?,work_mode=?,join_date=?,session_version=session_version+? WHERE id=?''',
+            (*[updates[key] for key in ('code','name','email','work_email','designation','department','location','work_mode','join_date')],int(login_changed),employee_id))
         audit(conn,actor['id'],'identity.profile_updated',f'employee:{employee_id}',
-              'Fields reviewed: '+','.join(changed))
-    return {'id':employee_id,'message':'Account profile saved','sessions_revoked':login_changed}
+              'Fields changed: '+','.join(changed)+(('; Reason: '+reason) if reason else ''))
+    return {'id':employee_id,'message':'Official work details saved','sessions_revoked':login_changed,'changed_fields':changed}

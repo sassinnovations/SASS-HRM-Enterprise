@@ -27,14 +27,18 @@ def vault_cipher():
     if not key:
         raise HTTPException(503,'Vault unavailable: VAULT_FERNET_KEY is not configured')
     try: return Fernet(key.encode('ascii'))
-    except (ValueError, UnicodeError) as exc:
+    except (ValueError, UnicodeError, binascii.Error) as exc:
         raise HTTPException(503,'Vault encryption key is invalid') from exc
 
 def clamd_connect():
     host=os.getenv('VAULT_AV_HOST','').strip()
     if not host:
         raise HTTPException(503,'Vault unavailable: malware scanner is not configured')
-    port=int(os.getenv('VAULT_AV_PORT','3310'))
+    try:
+        port=int(os.getenv('VAULT_AV_PORT','3310'))
+        if not 1<=port<=65535:raise ValueError('Port out of range')
+    except ValueError as exc:
+        raise HTTPException(503,'Vault malware scanner port is invalid') from exc
     try:
         sock=socket.create_connection((host,port),timeout=5)
         sock.settimeout(8)
@@ -64,8 +68,9 @@ def scan_file(blob):
             reply=sock.recv(4096).decode('utf-8','replace')
         except OSError as exc:
             raise HTTPException(503,'Vault scan failed; file was not stored') from exc
-    if 'FOUND' in reply:raise HTTPException(422,'Malware scanner rejected this document')
-    if 'OK' not in reply:raise HTTPException(503,'Malware scanner did not confirm a clean file')
+    result=reply.strip('\0\r\n ')
+    if result.endswith(' FOUND'):raise HTTPException(422,'Malware scanner rejected this document')
+    if result!='stream: OK':raise HTTPException(503,'Malware scanner did not confirm a clean file')
 
 @app.get('/api/vault/status')
 def vault_status(user=Depends(current_user)):
@@ -242,6 +247,12 @@ def vault_files(user=Depends(current_user)):
 
 @app.post('/api/vault/files',status_code=201)
 def vault_upload(body:VaultFileIn,user=Depends(current_user)):
+    # Reject cross-employee uploads before decoding or scanning untrusted bytes.
+    with db() as c:
+        if not can_view_employee(user,body.employee_id,c):raise HTTPException(403,'Private files belong to you or HR')
+        if not c.execute('SELECT id FROM employees WHERE id=?',(body.employee_id,)).fetchone():raise HTTPException(404,'Employee not found')
+        existing=c.execute('SELECT COUNT(*) FROM document_vault WHERE employee_id=?',(body.employee_id,)).fetchone()[0]
+        if existing>=30:raise HTTPException(409,'Storage limit: 30 files per employee')
     cipher=ensure_secure_vault()
     name=safe_name(body.filename)
     try:payload=base64.b64decode(body.data_base64,validate=True)
@@ -250,10 +261,9 @@ def vault_upload(body:VaultFileIn,user=Depends(current_user)):
     scan_file(payload)
     protected=VAULT_PREFIX+cipher.encrypt(payload)
     with db() as c:
-        if not can_view_employee(user,body.employee_id,c):raise HTTPException(403,'Private files belong to you or HR')
-        if not c.execute('SELECT id FROM employees WHERE id=?',(body.employee_id,)).fetchone():raise HTTPException(404,'Employee not found')
-        existing=c.execute('SELECT COUNT(*) FROM document_vault WHERE employee_id=?',(body.employee_id,)).fetchone()[0]
-        if existing>=30:raise HTTPException(409,'Storage limit: 30 files per employee')
+        # Recheck before writing because another upload may have completed during scanning.
+        if c.execute('SELECT COUNT(*) FROM document_vault WHERE employee_id=?',(body.employee_id,)).fetchone()[0]>=30:
+            raise HTTPException(409,'Storage limit: 30 files per employee')
         digest=hashlib.sha256(payload).hexdigest()
         result=c.execute('''INSERT INTO document_vault(employee_id,uploaded_by,filename,mime_type,category,byte_count,sha256,contents,created_at)
                            VALUES(?,?,?,?,?,?,?,?,?)''',
@@ -281,7 +291,8 @@ def vault_download(file_id:int,user=Depends(current_user)):
 
 @app.delete('/api/vault/files/{file_id}')
 def vault_delete(file_id:int,user=Depends(current_user)):
-    ensure_secure_vault()
+    # Deleting ciphertext never requires a key or malware scan; keep removal
+    # possible during scanner outages and after key loss.
     with db() as c:
         file=c.execute('SELECT * FROM document_vault WHERE id=?',(file_id,)).fetchone()
         if not file:raise HTTPException(404,'File not found')

@@ -11,6 +11,7 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 from typing import Any, Literal
 
 import httpx
@@ -34,11 +35,11 @@ if len(JWT_SECRET) < 40 or JWT_SECRET.startswith(('REPLACE_', 'LOCAL_DEMO', 'CHA
     raise RuntimeError('JWT_SECRET must be configured to a fresh random value of 40+ characters in server/.env')
 JWT_ISSUER = 'sass-hrm-enterprise'
 
-app = FastAPI(title='SASS HRM Enterprise API', version='4.5.0', description='SASS HRMS/HRIS with role-scoped employee assistance')
-_cors_origins=[x.strip() for x in os.getenv('CORS_ORIGINS', 'http://localhost:5173').split(',') if x.strip()]
-_public_app=os.getenv('PUBLIC_APP_URL', '').strip().rstrip('/')
-if _public_app and _public_app not in _cors_origins:
-    _cors_origins.append(_public_app)
+app = FastAPI(title='SASS HRM Enterprise API', version='4.8.0', description='SASS HRMS/HRIS with role-scoped employee assistance')
+_cors_origins = [x.strip().rstrip('/') for x in os.getenv('CORS_ORIGINS', 'http://localhost:5173').split(',') if x.strip()]
+_public_app_url = os.getenv('PUBLIC_APP_URL', '').strip().rstrip('/')
+if _public_app_url and _public_app_url not in _cors_origins:
+    _cors_origins.append(_public_app_url)
 app.add_middleware(CORSMiddleware, allow_origins=_cors_origins, allow_credentials=True, allow_methods=['*'], allow_headers=['*'])
 bearer = HTTPBearer(auto_error=False)
 
@@ -118,8 +119,7 @@ def init_db():
         if 'work_email' not in [x['name'] for x in c.execute('PRAGMA table_info(employees)').fetchall()]:
             c.execute('ALTER TABLE employees ADD COLUMN work_email TEXT')
         c.execute("UPDATE employees SET work_email=lower(email) WHERE work_email IS NULL OR trim(work_email)=''")
-        if DB_ENGINE != 'mysql':
-            c.execute('CREATE UNIQUE INDEX IF NOT EXISTS ux_employees_work_email ON employees(work_email)')
+        c.execute('CREATE UNIQUE INDEX IF NOT EXISTS ux_employees_work_email ON employees(work_email)')
         c.execute('''CREATE TABLE IF NOT EXISTS developer_grants (
             employee_id INTEGER PRIMARY KEY, enabled INTEGER NOT NULL DEFAULT 1,
             granted_at TEXT NOT NULL, FOREIGN KEY(employee_id) REFERENCES employees(id))''')
@@ -210,6 +210,37 @@ def health():
     with db() as c:
         c.execute('SELECT 1').fetchone()
     return {'status':'ok','service':'SASS HRM Enterprise','version':app.version,'database':DB_ENGINE}
+
+@app.get('/api/ready')
+def readiness():
+    """Live DB readiness; unlike a basic TCP probe, open core HRM tables.
+
+    This endpoint performs zero-row SELECTs and never returns HR data. The
+    MySQL connection bypasses the automatic schema installer, so health checks
+    cannot silently change live database structure.
+    """
+    tables = ('employees', 'attendance', 'salary_packages', 'pay_runs_v2',
+              'candidate_profiles', 'hiring_stage_settings', 'audit_events')
+    if DB_ENGINE == 'mysql':
+        from mysql_backend import raw_mysql_connection
+        from mysql_connection_audit import CORE_MODULES
+        raw = None
+        try:
+            raw = raw_mysql_connection()
+            with raw.cursor() as cursor:
+                cursor.execute('SELECT 1')
+                for table in tables:
+                    cursor.execute(f'SELECT 1 FROM `{table}` LIMIT 0')
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail='HRM MySQL or a required module table is unavailable') from exc
+        finally:
+            if raw is not None:
+                raw.close()
+    else:
+        with db() as conn:
+            conn.execute('SELECT 1').fetchone()
+    return {'status': 'ready', 'database': DB_ENGINE,
+            'core_tables_checked': len(tables) if DB_ENGINE == 'mysql' else 0}
 
 @app.post('/api/auth/login')
 def login(body: LoginBody):
@@ -364,7 +395,7 @@ def attendance(user=Depends(current_user)):
 
 @app.post('/api/attendance/check-in')
 def checkin(user=Depends(current_user)):
-    now=datetime.now().astimezone()
+    now=datetime.now(ZoneInfo(os.getenv('ATTENDANCE_TIMEZONE','Asia/Kolkata')))
     day=now.date().isoformat()
     with db() as c:
         found=c.execute('SELECT * FROM attendance WHERE employee_id=? AND day=?',(user['id'],day)).fetchone()
@@ -379,7 +410,7 @@ def checkin(user=Depends(current_user)):
 
 @app.post('/api/attendance/check-out')
 def checkout(user=Depends(current_user)):
-    now=datetime.now().astimezone()
+    now=datetime.now(ZoneInfo(os.getenv('ATTENDANCE_TIMEZONE','Asia/Kolkata')))
     with db() as c:
         found=c.execute('SELECT * FROM attendance WHERE employee_id=? AND day=?',(user['id'],now.date().isoformat())).fetchone()
         if not found or not found['check_in']:
@@ -653,12 +684,14 @@ import culture_ops  # noqa: E402,F401
 
 # v2.0 employee operations: asset custody, document review, preferences, AI capabilities
 import employee_services_v20  # noqa: E402,F401
+import asset_management  # noqa: E402,F401
 
 # v2.4.0: authenticated, role-scoped CSV exports
 import exports_v24  # noqa: E402,F401
 
 # v2.5.0: identity administration, password recovery and JWT session revocation
 import accounts_v25  # noqa: E402,F401
+import signup_v46  # noqa: E402,F401
 
 # v2.6: organization preferences and office directory
 import organization_settings_v26  # noqa: E402,F401
@@ -688,6 +721,7 @@ import global_search_v37  # noqa: E402,F401
 
 # v3.8: HR data-quality and workflow follow-up center
 import data_quality_v38  # noqa: E402,F401
+import data_quality_import  # noqa: E402,F401 - previewed, audited employee HRIS import
 
 import performance_v39  # noqa: E402,F401 - role-scoped performance assessments
 
@@ -698,3 +732,15 @@ import performance_journal_v42  # noqa: E402,F401 - private evidence and scoped 
 
 # v4.5 private successful sign-in activity and administrator security review
 import security_center_v45  # noqa: E402,F401
+
+# v4.7: advanced candidate search, full-fidelity Excel import and MySQL catalog.
+import candidate_library  # noqa: E402,F401
+
+# Dedicated recruitment stage windows and job qualification requirements.
+import hiring_pipeline  # noqa: E402,F401
+
+# v5.2: manual attendance, consented encrypted photo evidence, signed fingerprint/iris device assertions.
+import biometric_attendance  # noqa: E402,F401
+
+# Employee expense policies, claim evidence metadata, lifecycle and manual reimbursement ledger
+import expense_management  # noqa: E402,F401

@@ -1,53 +1,48 @@
-"""Database-status endpoint must accept MySQL 8/driver metadata casing."""
+"""Admin-only database status uses the read-only raw MySQL connection."""
 import os
 os.environ.setdefault('SASS_HRM_TESTING','1')
 os.environ.setdefault('DB_ENGINE','sqlite')
 os.environ.setdefault('JWT_SECRET','temporary-regression-testing-secret-value-123456789012345678901234567890')
-from contextlib import contextmanager
+from fastapi import HTTPException
+import main
+import mysql_backend
 import mysql_schema_status as target
-from schema_audit import get_required_schema
+from mysql_connection_audit_test import FakeMySQL
 
-required=get_required_schema()
-assert len(required)==105
-
-class FakeResult:
-    def __init__(self, data): self.data=data
-    def fetchall(self): return self.data
-    def fetchone(self): return self.data[0] if self.data else None
-
-class FakeConnection:
-    def __init__(self, uppercase, incomplete):
-        self.uppercase,self.incomplete=uppercase,incomplete
-    def execute(self, statement):
-        keys=lambda name:name.upper() if self.uppercase else name.lower()
-        if 'information_schema.tables' in statement:
-            names=set(required)
-            if self.incomplete: names.remove('profile_photos')
-            return FakeResult([{keys('object_name'): t.upper() if self.uppercase else t} for t in names])
-        if 'information_schema.columns' in statement:
-            return FakeResult([{keys('object_name'):t,keys('column_name'):col}
-                               for t,columns in required.items() if not (self.incomplete and t=='profile_photos')
-                               for col in columns if not (self.incomplete and (t,col)==('employees','work_email'))])
-        if 'MAX(version)' in statement: return FakeResult([{keys('version'):23}])
-        raise AssertionError(statement)
-
-@contextmanager
-def fake_db(upper=False, incomplete=False):
-    yield FakeConnection(upper,incomplete)
-
-original_db, original_engine=target.db,target.DB_ENGINE
+old_engine, old_factory = target.DB_ENGINE, mysql_backend.raw_mysql_connection
 try:
     target.DB_ENGINE='mysql'
-    for upper in (False,True):
-        for incomplete in (False,True):
-            target.db=lambda:fake_db(upper,incomplete)
-            status=target.database_status(user={'id':1,'role':'admin'})
-            assert status['expected_table_count']==105
-            assert status['schema_complete'] is (not incomplete)
-            assert ('profile_photos' in status['missing_tables']) is incomplete
-            assert ('employees.work_email' in status['missing_columns']) is incomplete
-            assert status['modules']['employees'] and status['schema_version']==23
-            assert status['table_count']==105-int(incomplete)
+    fake=FakeMySQL(uppercase=True)
+    mysql_backend.raw_mysql_connection=lambda:fake
+    result=target.database_status(probe_tables=True,user={'id':1,'role':'admin'})
+    assert result['schema_complete'] and result['table_access_passed']==241
+    assert result['schema_only_table_count']==115
+    assert fake.closed
+    # Wrong schema fails closed; no migrations are attempted by this endpoint.
+    mysql_backend.raw_mysql_connection=lambda:FakeMySQL(database='not_sass_hrm')
+    try:
+        target.database_status(probe_tables=False,user={'id':1,'role':'admin'})
+        raise AssertionError('Must reject wrong database')
+    except HTTPException as e:
+        assert e.status_code==503
+    # SQLite development fallback remains usable for isolated tests.
+    target.DB_ENGINE='sqlite'
+    from contextlib import contextmanager
+    class FakeSqlite:
+        def execute(self,sql):
+            class Rows:
+                def fetchall(self):return [{'name':'employees'},{'name':'attendance'}]
+            return Rows()
+    @contextmanager
+    def fake_db(): yield FakeSqlite()
+    old_db=target.db
+    try:
+        target.db=fake_db
+        status=target.database_status(user={'id':1,'role':'admin'})
+        assert status['engine']=='sqlite' and status['schema_complete'] is None
+        assert status['table_count']==2
+    finally:target.db=old_db
 finally:
-    target.db,target.DB_ENGINE=original_db,original_engine
-print('PASS: database status with mixed metadata casing and incomplete schema')
+    target.DB_ENGINE=old_engine
+    mysql_backend.raw_mysql_connection=old_factory
+print('PASS: database status is read-only and rejects incorrect live database')

@@ -2,12 +2,17 @@
 setlocal
 cd /d "%~dp0"
 echo ============================================
-echo SASS HRM Enterprise - API and website
-echo ============================================
-echo MySQL must already be running. server/.env selects that database.
-echo This opens the Python API and the React site in separate windows.
+echo SASS HRM Enterprise v4.6 - MySQL + Docker + ClamAV
+ echo ============================================
+echo This starts the complete Docker stack: MySQL, ClamAV, FastAPI and React.
+echo For separate Windows dev servers use START_LOCAL_DEV.bat instead.
 echo.
-start "SASS HRM Backend" powershell.exe -NoExit -ExecutionPolicy Bypass -File "%~dp0scripts\start-backend.ps1"
-start "SASS HRM Frontend" powershell.exe -NoExit -ExecutionPolicy Bypass -File "%~dp0scripts\start-frontend.ps1"
-echo After both windows are ready, open http://localhost:5173
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\start-docker-full.ps1"
+if errorlevel 1 (
+  echo.
+  echo Startup failed. Check the errors, and run VERIFY_DOCKER_FULL.bat later.
+  pause
+  exit /b 1
+)
+echo Open http://localhost:5173
 pause

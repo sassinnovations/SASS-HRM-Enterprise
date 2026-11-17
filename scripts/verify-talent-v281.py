@@ -13,7 +13,7 @@ backend = (root/'server/talent_ops.py').read_text(encoding='utf8')
 app = (root/'web/src/App.tsx').read_text(encoding='utf8')
 pkg = json.loads((root/'web/package.json').read_text(encoding='utf8'))
 lock = json.loads((root/'web/package-lock.json').read_text(encoding='utf8'))
-assert pkg['version']==lock['version']=='4.5.0'
+assert pkg['version']==lock['version']=='4.8.0'
 assert 'export function TalentTools' in web
 assert 'Authorization:`Bearer ${token}`' in web
 assert 'VITE_API_URL' in web
@@ -25,9 +25,9 @@ for endpoint in ["'/api/talent/candidates/{candidate_id}/details'",
                  "'/api/talent/tasks/{task_id}/details'"]:
     assert endpoint in backend, endpoint
 assert 'require_manager' in backend and 'require_hr' in backend
-assert "version='4.5.0'" in (root/'server/main.py').read_text(encoding='utf8')
+assert "version='4.8.0'" in (root/'server/main.py').read_text(encoding='utf8')
 assert 'talent_v281_test.py' in [p.name for p in (root/'server').glob('*_test.py')]
 if not args.workspace:
     for excluded in ('web/node_modules','web/dist','web/tsconfig.tsbuildinfo','server/.env','.env'):
         assert not (root/excluded).exists(), f'Shipped local secret or generated artifact: {excluded}'
-print('PASS talent compatibility checks on v4.5.0 package: authorization, dialogs, search/filter, edit permissions, version and clean distribution')
+print('PASS talent compatibility checks on v4.8.0 package: authorization, dialogs, search/filter, edit permissions, version and clean distribution')

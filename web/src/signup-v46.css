@@ -1,0 +1,51 @@
+/* v4.6 public account application / administrator review. Inherits SASS brand palette. */
+.signup-panel .login-card{max-height:none;}
+.signup-card{gap:11px!important;}
+.signup-card h2{margin-bottom:0!important;}
+.signup-card>p{margin-bottom:5px!important;}
+.signup-field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 15px;}
+.signup-field-grid label{display:flex!important;flex-direction:column;gap:7px;margin-bottom:0!important;}
+.signup-field-grid input,.signup-field-grid select{min-width:0;width:100%;height:43px;border:1px solid #dce3f2;border-radius:10px;padding:8px 12px;background:white;color:#24304a;font-size:13px;}
+.signup-field-grid input:focus,.signup-field-grid select:focus{outline:2px solid #b8baff;outline-offset:1px;}
+.signup-field-grid .signup-wide{grid-column:1/-1;}
+.signup-field-help{color:#637392;font-size:12px;line-height:1.5;padding:10px 12px;background:#f5f6ff;border-radius:10px;}
+.signup-success{padding:11px 13px;background:#eefaf5;color:#15583f;border-radius:10px;font-size:13px;line-height:1.6;}
+.signup-switch{text-align:center;font-size:13px;color:#59637b;margin-top:10px;}
+.signup-switch button{border:0;background:none;color:#4d53ca;font-weight:800;padding:6px;}
+.signup-approval{margin-bottom:25px;}
+.signup-approval .section-heading{align-items:center;}
+.signup-approval-filter{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:#4f5e78;}
+.signup-approval-filter select{border:1px solid #dfe3f1;background:white;padding:9px;border-radius:9px;}
+.signup-table-wrap{max-width:100%;overflow:auto;}
+.signup-table-wrap table{border-collapse:collapse;width:100%;font-size:12px;min-width:850px;}
+.signup-table-wrap th,.signup-table-wrap td{padding:12px 10px;text-align:left;border-bottom:1px solid #e5e9f3;vertical-align:middle;}
+.signup-table-wrap th{background:#f7f8ff;white-space:nowrap;color:#536380;}
+.signup-table-wrap td small{display:block;font-size:11px;color:#8491a7;margin-top:4px;}
+.signup-review-actions{display:flex;gap:7px;flex-wrap:wrap;}
+.signup-review-actions .btn{white-space:nowrap;font-size:11px;padding:9px 10px;}
+.signup-no-requests{text-align:center!important;color:#8290a4;padding:25px!important;}
+.signup-admin-guidance{font-size:12px;color:#6b7791;line-height:1.6;margin:15px 20px;}
+@media(max-width:520px){.signup-field-grid{grid-template-columns:1fr;}.signup-field-grid .signup-wide{grid-column:auto;}}
+
+/* v4.7 visible role selection and admin-controlled policy */
+.signup-switch button{display:inline-flex;align-items:center;justify-content:center;gap:6px;cursor:pointer}
+.signup-role-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:7px 0 8px}
+.signup-role-option{border:1px solid #dce3f2;border-radius:11px;padding:11px 10px;background:#fff;color:#283750;text-align:left;cursor:pointer;min-width:0}
+.signup-role-option strong,.signup-role-option small{display:block}
+.signup-role-option strong{font-size:12px}
+.signup-role-option small{font-size:10px;line-height:1.45;color:#697795;margin-top:5px}
+.signup-role-option.selected{border-color:#6666ce;background:#f2f3ff;box-shadow:0 0 0 1px #6666ce}
+.signup-role-option:disabled{opacity:.45;cursor:not-allowed}
+.signup-role-option:focus-visible{outline:3px solid #8998ff;outline-offset:2px}
+.signup-domain-notice{font-size:12px;color:#394f83;font-weight:700}
+.signup-settings-form{padding:0 20px 18px;display:flex;flex-direction:column;gap:15px}
+.signup-policy-check{display:flex;align-items:flex-start;gap:9px;font-size:13px;cursor:pointer}
+.signup-policy-check input{width:18px;height:18px;flex:none;accent-color:#545ac7}
+.signup-policy-check strong,.signup-policy-check small{display:block}
+.signup-policy-check small{font-size:12px;color:#64728c;line-height:1.4;margin-top:3px}
+.signup-settings-options{display:flex;flex-wrap:wrap;gap:12px 24px;padding:12px;border:1px solid #e7e9f4;border-radius:12px}
+.signup-domain-setting{display:flex;flex-direction:column;gap:6px;max-width:460px;font-size:13px;font-weight:700}
+.signup-domain-setting input{border-radius:9px;border:1px solid #cdd6e7;padding:10px;font:inherit}
+.signup-domain-setting small{font-size:11px;font-weight:400;color:#64728c}
+.signup-settings-form>.btn{align-self:flex-start}
+@media(max-width:680px){.signup-role-options{grid-template-columns:1fr}.signup-role-option{display:flex;flex-direction:column}.signup-settings-options{flex-direction:column}}

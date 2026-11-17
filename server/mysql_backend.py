@@ -24,11 +24,12 @@ def raw_mysql_connection():
         import pymysql
     except ImportError as e:
         raise RuntimeError('MySQL driver missing. Run: pip install -r requirements.txt') from e
-    # MYSQL_* is the app's own config. MYSQLHOST-style names are Railway's MySQL plugin references.
+    # Respect explicit app configuration; Railway MySQL plugin supplies MYSQLHOST-style variables.
+    # Keep the local Docker port fallback (3307) when no remote MySQL variables are configured.
     host = os.getenv('MYSQL_HOST') or os.getenv('MYSQLHOST') or '127.0.0.1'
-    port = os.getenv('MYSQL_PORT') or os.getenv('MYSQLPORT') or '3306'
+    port = os.getenv('MYSQL_PORT') or os.getenv('MYSQLPORT') or '3307'
     user = os.getenv('MYSQL_USER') or os.getenv('MYSQLUSER') or 'sass_hrm_app'
-    password = os.getenv('MYSQL_PASSWORD', os.getenv('MYSQLPASSWORD', ''))
+    password = os.getenv('MYSQL_PASSWORD') or os.getenv('MYSQLPASSWORD') or ''
     database = os.getenv('MYSQL_DATABASE') or os.getenv('MYSQLDATABASE') or 'sass_hrm'
     return pymysql.connect(
         host=host,
@@ -74,6 +75,12 @@ def install_schema(connection):
                         if cur.fetchone()['n']:
                             continue
                     cur.execute(statement)
+                # v5.0: preserve semantic deduplication when an admin removes an XLSX archive.
+                cur.execute("""SELECT COUNT(*) AS n FROM information_schema.columns
+                    WHERE table_schema=DATABASE() AND table_name='candidate_import_batches'
+                      AND column_name='content_sha256'""")
+                if cur.fetchone()['n'] == 0:
+                    cur.execute('ALTER TABLE candidate_import_batches ADD COLUMN content_sha256 CHAR(64) NULL')
                 # v4.3 additive migration: existing employee accounts retain IDs, password hashes and sessions.
                 cur.execute('''SELECT COUNT(*) AS n FROM information_schema.columns
                     WHERE table_schema=DATABASE() AND table_name='employees' AND column_name='work_email' ''')
@@ -90,6 +97,22 @@ def install_schema(connection):
                             (23,'v4.4 sanitized user-uploaded professional photos',datetime.now(timezone.utc).isoformat()))
                 cur.execute('INSERT IGNORE INTO schema_migrations(version,description,applied_at) VALUES(%s,%s,%s)',
                             (24,'v4.5 private successful sign-in activity and security review',datetime.now(timezone.utc).isoformat()))
+                cur.execute('INSERT IGNORE INTO schema_migrations(version,description,applied_at) VALUES(%s,%s,%s)',
+                            (25,'v4.6 public sign-up requests with administrator approval',datetime.now(timezone.utc).isoformat()))
+                cur.execute('INSERT IGNORE INTO schema_migrations(version,description,applied_at) VALUES(%s,%s,%s)',
+                            (26,'v4.8 role-scoped candidate search, workbook archive and Excel import',datetime.now(timezone.utc).isoformat()))
+                cur.execute('INSERT IGNORE INTO schema_migrations(version,description,applied_at) VALUES(%s,%s,%s)',
+                            (27,'v5.0 administrator-only XLSX archive and import deletion',datetime.now(timezone.utc).isoformat()))
+                cur.execute('INSERT IGNORE INTO schema_migrations(version,description,applied_at) VALUES(%s,%s,%s)',
+                            (28,'v5.2 consented photo, signed fingerprint and iris, HR manual attendance',datetime.now(timezone.utc).isoformat()))
+                cur.execute('INSERT IGNORE INTO schema_migrations(version,description,applied_at) VALUES(%s,%s,%s)',
+                            (29,'v5.4 advanced HR data foundations (15 additive tables)',datetime.now(timezone.utc).isoformat()))
+                cur.execute('INSERT IGNORE INTO schema_migrations(version,description,applied_at) VALUES(%s,%s,%s)',
+                            (30,'Extended HR workflow data foundations (20 additive tables)',datetime.now(timezone.utc).isoformat()))
+                cur.execute('INSERT IGNORE INTO schema_migrations(version,description,applied_at) VALUES(%s,%s,%s)',
+                            (31,'Reviewed HR data-quality employee imports and saved import settings',datetime.now(timezone.utc).isoformat()))
+                cur.execute('INSERT IGNORE INTO schema_migrations(version,description,applied_at) VALUES(%s,%s,%s)',
+                            (32,'Additive operational evidence foundations: 20 tables',datetime.now(timezone.utc).isoformat()))
                 cur.execute('INSERT IGNORE INTO schema_migrations(version,description,applied_at) VALUES(%s,%s,%s)',
                             (1,'Initial full HRMS schema',datetime.now(timezone.utc).isoformat()))
                 cur.execute('INSERT IGNORE INTO schema_migrations(version,description,applied_at) VALUES(%s,%s,%s)',

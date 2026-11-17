@@ -3,6 +3,7 @@ import {useCallback,useEffect,useState} from 'react';
 import {AlertTriangle,CheckCircle2,ClipboardCheck,Download,Settings2,ShieldCheck} from 'lucide-react';
 import {useRefreshData} from './useRefreshData';
 import './data-quality-center.css';
+import {DataQualityImporter} from './DataQualityImporter';
 
 type Issue={key:string;kind:string;record_id:number;subject:string;detail:string;status:string;assigned_to:number|null;note:string;updated_at:string;page:string};
 type Results={items:Issue[];total:number;truncated_sources:string[];rule_names:string[]};
@@ -70,6 +71,7 @@ export function DataQualityCenter({navigate}:{navigate:(page:string)=>void}){
  return <section className="dq-page">
   <div className="dq-hero"><div><span className="dq-eyebrow">PEOPLE MANAGEMENT / ADMINISTRATOR ONLY</span><h1>HR data quality center</h1><p>Identify incomplete directory records and delayed workflows, assign human follow-up, and record review decisions. Findings do not change employee records or automatically decide cases.</p></div>
    <div className="dq-actions"><button onClick={()=>setSettingsOpen(x=>!x)}><Settings2 size={16}/> Quality rules</button><button onClick={()=>void download()} disabled={busy}><Download size={16}/> Export CSV</button></div></div>
+  <DataQualityImporter/>
   <div className="dq-stats"><article><ClipboardCheck size={20}/><small>Matching findings</small><strong>{results?.total??'—'}</strong></article><article><ShieldCheck size={20}/><small>Active monitoring rules</small><strong>6</strong></article><article><CheckCircle2 size={20}/><small>Access</small><strong>HR only</strong></article></div>
   {error&&<div className="dq-alert error" role="alert">{error}</div>}{notice&&<div className="dq-alert success" role="status">{notice}</div>}
   {!!results?.truncated_sources.length&&<div className="dq-alert error" role="alert"><AlertTriangle size={17}/> Large dataset: source limit reached for {results.truncated_sources.join(', ')}. Results may be incomplete; CSV export is unavailable until you narrow the underlying dataset.</div>}

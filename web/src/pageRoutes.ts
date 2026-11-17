@@ -35,6 +35,7 @@ export const PAGE_ROUTES: Record<string, string> = {
   developer: '/people/developer-console',
 
   recruitment: '/talent/recruitment-ats',
+  candidatesearch: '/talent/candidate-search-database',
   interviews: '/talent/interview-scheduling',
   onboarding: '/talent/onboarding',
   requestdesk: '/talent/request-desk',

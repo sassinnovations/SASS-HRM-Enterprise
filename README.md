@@ -1,8 +1,142 @@
+# SASS HRM Enterprise — Saritha merged release (17 November 2026)
+
+This distribution starts from the newer SASS HRM Enterprise feature/database release and
+**retains the uploaded Saritha edition's Railway/Vercel deployment files and MySQL environment compatibility**.
+
+- **241 MySQL tables** (1,986 columns, 274 named indexes, 442 foreign keys); existing data is not included.
+- Added candidate search, hiring stage configuration, payroll workbench, biometric attendance options,
+  detailed Asset Management, Employee HRIS CSV/XLSX import settings and Expenses & Claims policy/claims workflows.
+- Railway app startup reads either explicit `MYSQL_HOST`/`MYSQL_PORT` or Railway MySQL plugin's
+  `MYSQLHOST`/`MYSQLPORT` variables. Configure a fresh 40+ character `JWT_SECRET` and permitted `CORS_ORIGINS`.
+- Read **`SARITHA_MERGE_DEPLOYMENT_GUIDE.md`** and **`SARITHA_MERGE_COMPARISON_REPORT.md`** before deploying.
+- Back up existing MySQL first. **Never run the fresh-install SQL on a populated database** or reset MySQL volumes.
+- Several advanced tables are foundations without completed user-facing APIs. Live production readiness remains unverified.
+
+---
+
+# Previous milestone — 237-table database (17 November 2026)
+
+This update adds **20 additive, schema-only operational evidence tables** for
+employee records, attendance/leave approvals, payroll ESI/PF reviews, recruitment
+assessments, asset acknowledgements, and HR Data Quality import exceptions.
+
+- Current schema: **237 tables, 1,962 columns, 271 named indexes, 436 foreign keys**.
+- Existing MySQL (only after backup): `database/18_ADDITIONAL_OPERATIONAL_EVIDENCE_ADD_ONLY.sql`.
+- New empty database only: `database/02_FRESH_INSTALL_ALL_IN_ONE.sql`.
+- Verification: `CHECK_ADDITIONAL_MYSQL_EVIDENCE.bat` (add `/LIVE` to check a running MySQL service).
+- Upgrade instructions: `MYSQL_237_TABLE_UPGRADE_GUIDE.md`.
+- **No candidate records preloaded**; no live data was modified.
+- These new tables do not yet have corresponding CRUD screens, APIs or automation.
+
+Do not reset MySQL volumes. The previous release notes follow for historical context.
+
+---
+
+# Previous release: Asset Management — inventory and inspections (16 November 2026)
+
+> **HR Data Quality Center Import Settings (November 16, 2026):** The administrator-only data-quality page now includes a reviewed employee CSV/XLSX import with saved column mapping, duplicate strategy, date and worksheet settings, strict row validation, preview confirmation, import history, and inactive-account creation. It never overwrites existing employees. See [HR Data Quality Import Upgrade Guide](HR_DATA_QUALITY_IMPORT_UPGRADE_GUIDE.md).
+
+That release contained **217 tables** (1,784 columns). The Asset Management module now uses
+`asset_profiles` and `asset_inspections` for full descriptions, vendor/warranty information,
+condition checklists and maintenance requests, with administrator-only modifications and audit records.
+See `ASSET_MANAGEMENT_UPGRADE_GUIDE.md`. Upgrade SQL: `database/16_ASSET_MANAGEMENT_PROFILES_INSPECTIONS_ADD_ONLY.sql`.
+**Back up before upgrading; never reset MySQL volumes.** Previous 213-table release notes below are historical.
+
+---
+
+# Current MySQL database extension — 213 tables (16 November 2026)
+
+SASS HRM now includes a 20-table add-only operational-controls migration:
+`database/15_ADDITIONAL_CONTROL_TABLES_ADD_ONLY.sql`. The full database schema
+contains **213 tables, 1,737 columns, 227 named indexes and 377 foreign-key
+relationships**, with zero preloaded candidate records. Existing employee and
+payroll data are not changed by simply extracting this release.
+
+For a backed-up **existing 193-table** installation, review and apply migration
+15 only, then run `CHECK_CONTROL_MYSQL_EXTENSION.bat /LIVE` for read-only
+schema verification. For a **new empty database**, review
+`database/02_FRESH_INSTALL_ALL_IN_ONE.sql` instead. Never delete MySQL volumes.
+
+The newest 20 tables do not have corresponding operational UI/API workflows;
+the same is true of 75 earlier foundation tables. Full MySQL execution and
+end-to-end browser behavior have not been independently verified.
+See `database/README.md` and `docs/DATABASE_CONTROL_EXTENSION_213.md`.
+
+---
+
+# SASS HRM Enterprise — MySQL 193-table extension (historical)
+
+Database-only addition: `database/14_REVIEW_AND_PLANNING_TABLES_ADD_ONLY.sql` adds 20 tables
+(4 each for employee operations, attendance/leave, payroll review, recruitment,
+and compliance/services). The authoritative schema now contains **193 tables,
+1,539 columns, 187 named indexes and 311 foreign-key relationships**.
+
+This does **not** create new UI pages, API routes, permissions or automatic workflow processing.
+Do not grant application access to these tables before implementing server-side role checks,
+validation, audit logging, retention rules, and (where needed) confidential data protection.
+
+**Existing MySQL**: Back up and test restoring it. Review and run *only*
+`database/14_REVIEW_AND_PLANNING_TABLES_ADD_ONLY.sql` against an existing, verified
+**173-table** SASS HRM schema. Run earlier migrations in order if missing. The migration
+has only `CREATE TABLE IF NOT EXISTS` statements; it does not delete, seed, alter or
+clear existing records. MySQL DDL is not transactional: interrupted execution may be
+partial. `IF NOT EXISTS` alone does not repair schema drift.
+
+**New empty MySQL**: Review `database/02_FRESH_INSTALL_ALL_IN_ONE.sql` and apply it
+only to a **new, empty** database. It includes no candidate, salary, employee or sample records.
+
+**Verification**: Run `CHECK_PLANNING_MYSQL_EXTENSION.bat` for offline checks,
+`CHECK_PLANNING_MYSQL_EXTENSION.bat /LIVE` for read-only live schema checks.
+No production deployment or actual MySQL execution is claimed.
+
+---
+
+# Historical MySQL release — 173 tables (November 16, 2026)
+
+This package includes 20 additional operational database foundations on top of the previous 153-table schema: **173 tables / 1,343 columns / 147 named indexes / 252 foreign keys**. See [current database instructions](database/README.md). The new tables do not activate new screens or payroll integrations, and existing customer data is not changed until you choose to run the additive migration. Fresh installations begin with **zero candidate records**.
+
+---
+
+# Historical release notes — Advanced MySQL Schema Expansion (133 tables)
+
+The MySQL schema now includes 15 additional, non-destructive **data foundation** tables, raising its total to 133. See `database/README.md` and `docs/ADVANCED_HR_MYSQL_EXPANSION_2026_11_16.md`. **These tables do not add functional screens or automated integrations.** Existing candidates remain zero-preloaded. Preserve the MySQL volume and back up before upgrading.
+
+---
+
+# Current release: EMPTY candidate database (November 2026)
+
+**No candidate Excel workbook or 7,435-row MySQL seed is shipped in this release.**
+Fresh installations have **zero candidates**, while all candidate search, Excel upload,
+CRUD, filtering, sorting, hiring stages, job-opening records and other HRM modules remain.
+The 29 job-role suggestions are retained, but they are *labels*, not applicants.
+
+**Existing MySQL data is never silently erased by installing this ZIP.** To intentionally
+clear your existing library, sign in as HR admin, open **Talent Management → Candidate
+Search & Database → Clear all candidates**, review the preview, back up MySQL, enter a
+reason and type `CLEAR ALL CANDIDATES`. The operation refuses to delete linked
+interviews or recruitment activity. Review the instructions in
+`docs/EMPTY_CANDIDATE_LIBRARY.md` before using it.
+
+To import your next workbook, use the in-app upload or pass the explicit path to
+`IMPORT_CANDIDATES_TO_MYSQL.bat`; there is no default workbook.
+
+---
+
+> **Payroll Workbench safe deletion (November 13, 2026):** HR administrators can delete salary packages, monthly adjustments, and Draft/Reviewed payroll runs after supplying a reason and typing `DELETE`. Published payroll runs and historic employee payslips are protected. See [Payroll Delete Feature](docs/PAYROLL_WORKBENCH_DELETE_FEATURE_2026_11_13.md) and run `CHECK_PAYROLL_DELETION.bat`. Existing production data is never deleted by installation alone. Backup the MySQL database before upgrading.
+
+> **Candidate Excel Sheet Removal (November 12, 2026):** Administrators can now remove an uploaded Excel workbook from **Candidate Search & Database → Import history** without deleting its MySQL candidate records, or deliberately delete the selected import and its associated candidates after typing `DELETE`. Existing hiring references block bulk deletion. Backup first; the feature does not automatically delete any customer data. See [Candidate Excel Removal guide](docs/V5_0_CANDIDATE_EXCEL_REMOVAL.md). The updated backend applies one additive metadata column migration to existing MySQL installations.
+
+> **2026-11-10 candidate-search audit:** Fixed descending original Excel-row sorting, literal `%`/`_`/`!` search handling, malformed XLSX errors (422 instead of 500), and the duplicate Refresh control. Candidate Search now responds to the application-wide **Refresh data** button. Run `CHECK_FULL_SYSTEM_AUDIT.bat` and `CHECK_CANDIDATE_LIBRARY.bat` to rerun source/API/data tests. Full browser builds and live MySQL deployment must still be verified on your own configured environment; see `docs/V4_9_1_CANDIDATE_AUDIT_FIXES.md`.
+
+> **v4.8 Candidate Database:** Added 7,435-row source workbook, authenticated candidate-library page with MySQL-backed Excel import, full original-workbook archive, skills/education/role filters, sorting, editing, creation and deletion. Follow [v4.8 candidate deployment instructions](docs/V4_8_CANDIDATE_LIBRARY_IMPORT_AND_SEARCH.md), run `CHECK_CANDIDATE_LIBRARY.bat`, and back up the existing database before upgrading. The workbook is included but **not loaded into your live MySQL database until you import it**.
+
+> **Signup settings enhancement:** The `/sign-in` page now has **Create Employee / HR / Admin account**, plus administrator-controlled public signup settings, MySQL persistence, HR approval, role-specific restrictions and expired-request handling. **Read [SIGNUP_INSTALL_GUIDE.md](SIGNUP_INSTALL_GUIDE.md) before deploying to an existing database.** Backup first; never reset live MySQL volumes.
+
 > **v4.5.0:** Account Security Center and admin sign-in review added. For existing MySQL databases, preserve data and complete a backup-first schema repair; see `docs/V4_5_ACCOUNT_SECURITY_CENTER.md`.
 
 > **v4.4.0 Profile Editing & Photo Upgrade**: See `docs/V4_4_PROFILE_PHOTOS_AND_EDITING.md` for profile-photo upload/delete, safe optional-profile reset and additive MySQL migration.
 
-> **v4.3.1 reliability update:** Shared 25-second API timeout, clearer session expiry and connection warnings across frontend pages; 70 individual URLs and the single **Refresh data** button retained. See `docs/V4_3_1_CROSS_MODULE_RELIABILITY.md`. This release requires live browser and MySQL testing before production.
+> **v4.3.1 reliability update:** Shared 25-second API timeout, clearer session expiry and connection warnings across frontend pages; 72 individual URLs (as of v4.6) and the single **Refresh data** button retained. See `docs/V4_3_1_CROSS_MODULE_RELIABILITY.md`. This release requires live browser and MySQL testing before production.
 
 > **v4.3.0 employee performance upgrade:** Private/shareable evidence portfolio and auditable goal check-in journal. See `docs/V4_2_PERFORMANCE_EVIDENCE_GOAL_JOURNAL.md`. Run `CHECK_PERFORMANCE_V42.bat` to check source workflows.
 
@@ -65,7 +199,7 @@ Added a separate administrator-only **Compensation settings** page (`/compensati
 **Upgrade note (v2.3):** See `docs/V2_3_CONNECTION_DIAGNOSTICS.md`. If the dashboard shows SQLite, run `DIAGNOSE_CONNECTION.bat`; the backend you are viewing may be an older test instance. Updated Company setup blocks MySQL-unverified profile saves and employee import, exposes the backend release version, and links to unfinished setup sections. No existing MySQL records are removed. Use original `.env` files and Docker database volume when upgrading.
 
 
-**Run it:** React in `web/` (Vercel), FastAPI in `server/` (Railway), and MySQL. Locally, put the MySQL connection in `server/.env`, then run `START_HERE.bat` and open **http://localhost:5173**. On a new empty database, create the first administrator with `CREATE_ADMIN.bat`. Hosted API settings live on the Railway service; set Vercel `VITE_API_URL` to that API origin.
+**Recommended local launch:** After installing Docker Desktop and configuring a fresh instance with `SETUP_SASS_HRM.bat`, run **`START_DOCKER_FULL.bat`** to launch the MySQL, FastAPI, and built React frontend containers together. On a new empty MySQL database only, create your first administrator using `CREATE_ADMIN.bat` (local Python needed). Open **http://localhost:5173**. Run **`VERIFY_DOCKER_FULL.bat`** for health/proxy/schema checks, **`BACKUP_MYSQL.bat`** for a binary-safe backup, and **`VERIFY_EVERYTHING.bat`** for isolated API tests and a real frontend build.
 
 **Existing deployments:** Keep the same persistent Docker volume and previously generated `.env` and `server/.env`; never rerun first-time setup, never reset passwords, and never use `docker compose down -v`. Back up and test restoration before making changes. The v2.4.0 distribution contains no `.env` files, secrets, databases or bundled `node_modules` (older v2.3.0 ZIP copies may contain exposed secrets).
 
@@ -134,10 +268,6 @@ Requirements: Python 3.11+, Node.js 20+, Docker Desktop with MySQL 8.4 image acc
 5. In Organization, create departments, holidays and announcements. In Leave Management, add the organization's leave categories and approved entitlements. In Policies, add approved handbook documents. In Employee HRIS, create employee profiles.
 6. Before sending invitations, edit `server/.env` and supply `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`. The invitations API uses TLS SMTP and **never sends an activation token to the browser**. Then use Account Provisioning to email invitation tokens to your staff.
 
-### Use an existing local MySQL server
-
-Back up the target database first. Set `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_DATABASE`, `MYSQL_USER` and `MYSQL_PASSWORD` in `server/.env` for that server, then run `START_LOCAL_DEV.bat`. The backend starts the bundled Docker MySQL only when configured for `127.0.0.1:3307`; other MySQL endpoints are used as configured. Startup applies the application's additive schema setup to the selected database, so do not point it at a database you cannot safely migrate. Use a dedicated least-privilege application account rather than MySQL `root` for ongoing use.
-
 ### Key entry points
 
 - Frontend: `http://localhost:5173`
@@ -160,11 +290,15 @@ Employee HRIS / organization chart, account and invitations management, leave an
 
 Reference tax calculators (India 2026–27, UK 2026–27, US 2026 federal single filer) and India payroll workbench remain for **estimation and manual review only**. Payroll publication is **disabled unless** `PAYROLL_PUBLICATION_ENABLED=1` is explicitly configured following finance/legal verification; it is not a bank-transfer or government-filing facility. No real payout or statutory filing is made. Legacy manual payslip entry is retired; the historical payslip archive is restored as read-only, and current approved statements remain in the payroll workbench.
 
+### File upload setup and validation
+
+See [`docs/FILE_UPLOAD_QA_AND_SETUP.md`](docs/FILE_UPLOAD_QA_AND_SETUP.md) for the profile photo upload, employee CSV import and private encrypted document vault workflows, setup and limitations. The Settings Center now links to the vault and reports whether the secure upload prerequisites are ready. **Do not overwrite the encryption key for an existing vault.**
+
 ### Security and deployment limitations
 
 This is a **deployment-oriented foundation, not a production-certified HR platform**. The bundled password-based authentication and role checks are not substitutes for SSO/MFA, security review, penetration testing, access reviews, encrypted backups, managed secrets, audited storage, privacy compliance, incident response, monitoring or disaster recovery.
 
-The secure document vault UI is restored. **Uploads and downloads are disabled by default** unless `VAULT_FERNET_KEY` and a live ClamAV `clamd` scanner (`VAULT_AV_HOST`, `VAULT_AV_PORT`) are configured. With those prerequisites, each upload is malware-scanned and Fernet-encrypted before storing the ciphertext in the database; the owner or authorized HR can access it. Historical unencrypted blobs cannot be downloaded through this API. This is a development implementation, not enterprise DLP, key rotation, malware assurance, retention, access governance or compliance certification. Metadata-only registration remains available. Do not store sensitive personnel records, medical information or regulated payroll/identity information before independent security/legal review and deployment hardening.
+The secure document vault UI is restored. **New installations generate a vault encryption key during setup and include a private-network ClamAV scanner container**. Existing installations still require manually configuring `VAULT_FERNET_KEY` and reachable ClamAV (`VAULT_AV_HOST`, `VAULT_AV_PORT`); uploads and downloads fail closed when either is missing or unavailable. With those prerequisites, each upload is malware-scanned and Fernet-encrypted before storing the ciphertext in the database; the owner or authorized HR can access it. Historical unencrypted blobs cannot be downloaded through this API. This is a development implementation, not enterprise DLP, key rotation, malware assurance, retention, access governance or compliance certification. Metadata-only registration remains available. Do not store sensitive personnel records, medical information or regulated payroll/identity information before independent security/legal review and deployment hardening.
 
 The read-only AI assistant does not autonomously approve hiring, payroll or termination decisions; any configured external LLM requires a data processing/privacy review. The application has no preinstalled official SASS HR policies or company payroll regulations. Local legal and tax expertise must validate all country/state statutory calculations before live use.
 
@@ -226,3 +360,55 @@ backup/restore, operational security and payroll compliance checks have passed.*
 ## Complete MySQL database coverage (schema patch)
 
 The updated SQL inventory is in [`database/README.md`](database/README.md). It contains 86 application tables, a MySQL Workbench import file, `CHECK_FULL_MYSQL_SCHEMA.bat` (read-only verification), and `INSTALL_FULL_MYSQL_SCHEMA.bat` (explicitly confirmed additive install). This patch adds the previously missing `compensation_workflow_settings` table; it does not replace current HR/payroll data. Back up before applying it.
+
+## Candidate Search + complete MySQL Excel data package
+
+**CURRENT CLEAN RELEASE:** Prior candidate workbook and SQL seed were removed. You can add applicants or upload a NEW Excel workbook in Candidate Search; see `docs/EMPTY_CANDIDATE_LIBRARY.md`. The 29 job-role suggestions remain, but candidate count starts at zero for new databases.
+
+## Live verification for MySQL, secure uploads, payroll and browser delivery (11 Nov 2026)
+
+Run `START_DOCKER_FULL.bat`, then `VERIFY_DOCKER_FULL.bat`, and then **`VERIFY_FOUR_LIVE_AREAS.bat`** on the Windows host running SASS HRM. The new verifier checks live MySQL/API connectivity, HTTP frontend delivery, and—when you log in—protected employee, payroll and settings endpoints. A temporary encrypted vault upload/download/delete can be tested by opting in at the prompt. The browser still needs human click-through verification and payroll still needs a controlled dry-run. See `docs/LIVE_FOUR_AREAS_VERIFICATION.md` for instructions and limitations. Database data volumes and security requirements are retained.
+
+### HR-managed official work details editing (2026-11-14)
+
+HR administrators can now edit employee code, official name, work email, department, designation, office, work mode, and joining date directly from **My profile → Official work details**. Role remains restricted to Account Administration; all changes are validated and audited. See `docs/OFFICIAL_WORK_DETAILS_EDITOR_2026-11-14.md` and run `VERIFY_OFFICIAL_WORK_DETAILS_EDIT.bat` for isolated regression checks.
+
+
+## Biometric and manual attendance extensions (v5.2)
+
+Open **Compensation → Time & attendance** for HR-managed manual attendance, consented photo check-ins, and fingerprint/iris device gateway status. Photo and device attendance are disabled until explicitly configured. No biometric fingerprint or iris templates are stored in MySQL. See [ATTENDANCE_BIOMETRIC_INSTALL_GUIDE.md](ATTENDANCE_BIOMETRIC_INSTALL_GUIDE.md) for privacy/security setup and the on-site hardware test plan. Existing candidate preload remains empty by default.
+
+### Country tax calculator (November 2026)
+
+The global tax calculator offers illustrative salary income-tax estimates for India, United Kingdom, United States, Australia and United Arab Emirates, with country-specific status selections, progressive band details and CSV export. It does not perform statutory payroll withholding. See `COUNTRY_TAX_CALCULATOR_INSTALL_GUIDE.md` and run `CHECK_COUNTRY_TAX_CALCULATOR.bat` for its test suite.
+
+## Payroll workbench control upgrade (2026-11-16)
+
+The India payroll simulation now includes HR-only preflight readiness, warnings for missing active salary packages, editable Draft-period adjustments, explicit draft recalculation, out-of-date snapshot checks, documented review checklists/notes, optional two-person approval, correction history, net-pay variance review and personal CSV statement export. See `PAYROLL_WORKBENCH_UPGRADE_GUIDE.md`. Published payroll is immutable. Bank transfers and statutory filings remain **unimplemented**.
+
+
+## Complete MySQL schema (117 tables)
+
+The bundled `database/02_FRESH_INSTALL_ALL_IN_ONE.sql` has been synchronized to `server/mysql_schema.sql` (117 tables / 813 columns). Run `CHECK_ALL_MYSQL_FEATURES.bat` for read-only source checks; run `CHECK_ALL_MYSQL_FEATURES.bat /LIVE` with the Docker stack running for a full MySQL table/column/index/foreign-key audit. For existing databases, back up first and use the approved additive installer, not fresh-install SQL. No candidate Excel data is preloaded. Details: `database/README.md`.
+
+## Hiring-stage requirements and settings
+Recruitment ATS > Hiring layout contains 7 configurable stage windows.
+HR administrators can edit stage checklists, instructions, reviewer permissions,
+review targets and minimum note length within each window; the server enforces
+these controls. Existing job-specific requirements remain available.
+For an existing MySQL deployment run the **add-only** migration
+`database/11_HIRING_STAGE_SETTINGS_ADD_ONLY.sql` after backup, then follow
+`docs/HIRING_STAGE_SETTINGS_UPGRADE_2026_11_16.md`.
+
+### MySQL workflow expansion (153-table release)
+
+The database now includes 20 additional **schema-only** workflow tables for
+employee reviews, attendance/leave exceptions, payroll reconciliation,
+recruitment reviews and data governance. The additive migration is
+`database/12_ADDITIONAL_WORKFLOW_TABLES_ADD_ONLY.sql`; the full fresh-install
+schema is `database/02_FRESH_INSTALL_ALL_IN_ONE.sql`. See
+`docs/WORKFLOW_MYSQL_20_TABLES_2026_11_16.md` before deployment. Run
+`CHECK_WORKFLOW_MYSQL_EXTENSION.bat` for offline checks or add `/LIVE` to audit
+an existing MySQL deployment. No candidates, employees or payroll records are
+preloaded. No new application screens or data-processing features are enabled
+by the database expansion alone.

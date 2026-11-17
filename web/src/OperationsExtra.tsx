@@ -47,8 +47,13 @@ export function DocumentVault({role,employeeId,employees}:{role:string;employeeI
  useRefreshData(()=>{void load();void request<{enabled:boolean;message:string}>('/vault/status').then(r=>{setEnabled(r.enabled);setSecurityInfo(r.message)}).catch(()=>{});});
  async function upload(e:React.FormEvent){e.preventDefault();if(!file)return;setBusy(true);setError('');setMessage('');try{
    if(file.size>2*1024*1024)throw Error('Maximum file size is 2 MiB');
+   const typeByExtension:Record<string,string>={pdf:'application/pdf',png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',txt:'text/plain'};
+   const extension=file.name.split('.').pop()?.toLowerCase()||'';
+   const expectedType=typeByExtension[extension];
+   if(!expectedType)throw Error('Select a PDF, PNG, JPEG or UTF-8 TXT file');
+   if(file.type&&file.type!=='application/octet-stream'&&file.type!==expectedType)throw Error('File extension and media type do not match');
+   const mime=expectedType;
    const encoded=await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]||'');reader.onerror=()=>reject(Error('Could not read file'));reader.readAsDataURL(file)});
-   const mime=file.type||(file.name.toLowerCase().endsWith('.txt')?'text/plain':'');
    await request('/vault/files','POST',{employee_id:target,filename:file.name,mime_type:mime,category,data_base64:encoded});
    setFile(null);const input=document.getElementById('sass-vault-file') as HTMLInputElement|null;if(input)input.value='';setMessage('File saved');await load();
  }catch(e){setError((e as Error).message)}finally{setBusy(false)}}
@@ -62,7 +67,7 @@ export function DocumentVault({role,employeeId,employees}:{role:string;employeeI
  <label>Category<select value={category} onChange={e=>setCategory(e.target.value)}>{['Employment','Education','Identity','Payroll','Other'].map(x=><option key={x}>{x}</option>)}</select></label>
  <label>File (PDF, PNG, JPEG, TXT · max 2 MiB)<input id="sass-vault-file" disabled={!enabled} required type="file" accept=".pdf,.png,.jpg,.jpeg,.txt" onChange={e=>setFile(e.target.files?.[0]||null)}/></label></div>
  <button className="ops-button" type="submit" disabled={busy||!file||!enabled}><FilePlus2 size={16}/> {busy?'Uploading…':'Upload document'}</button></form>
- <section className="ops-card"><div className="ops-card-head"><div><h3>Stored files</h3><p>{rows.length} files available to this account</p></div></div><div className="ops-table-wrap"><table><thead><tr><th>Document</th><th>Employee</th><th>Category</th><th>Size</th><th>Added</th><th>Actions</th></tr></thead><tbody>{rows.map(r=><tr key={r.id}><td><FileLock2 size={16}/> {r.filename}</td><td>{r.employee_name}</td><td>{r.category}</td><td>{Math.ceil(r.byte_count/1024)} KiB</td><td>{fmtDate(r.created_at)}</td><td><div className="ops-actions"><button onClick={()=>download(r)}><Download size={15}/> Download</button><button disabled={busy} onClick={()=>remove(r)}><Trash2 size={15}/> Delete</button></div></td></tr>)}</tbody></table>{!rows.length&&<p className="ops-empty">No files have been uploaded.</p>}</div></section></div>
+ <section className="ops-card"><div className="ops-card-head"><div><h3>Stored files</h3><p>{rows.length} files available to this account</p></div></div><div className="ops-table-wrap"><table><thead><tr><th>Document</th><th>Employee</th><th>Category</th><th>Size</th><th>Added</th><th>Actions</th></tr></thead><tbody>{rows.map(r=><tr key={r.id}><td><FileLock2 size={16}/> {r.filename}</td><td>{r.employee_name}</td><td>{r.category}</td><td>{Math.ceil(r.byte_count/1024)} KiB</td><td>{fmtDate(r.created_at)}</td><td><div className="ops-actions"><button disabled={!enabled} onClick={()=>download(r)}><Download size={15}/> Download</button><button disabled={busy} onClick={()=>remove(r)}><Trash2 size={15}/> Delete</button></div></td></tr>)}</tbody></table>{!rows.length&&<p className="ops-empty">No files have been uploaded.</p>}</div></section></div>
 }
 
 export function ReadinessCenter({navigate}:{navigate:(key:string)=>void}){

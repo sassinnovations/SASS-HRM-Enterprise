@@ -155,6 +155,22 @@ def live_check(required: dict[str, set[str]]) -> tuple[list[str], list[tuple[str
         connection.close()
 
 
+def missing_standalone_indexes(connection) -> list[tuple[str, str]]:
+    """Find absent standalone indexes, without modifying database records."""
+    from mysql_backend import split_ddl
+    required = set()
+    pattern = re.compile(r'^CREATE\s+(?:UNIQUE\s+)?INDEX\s+`?(\w+)`?\s+ON\s+`?(\w+)`?\s*\(', re.I)
+    for statement in split_ddl(SCHEMA.read_text(encoding='utf-8')):
+        if match := pattern.match(statement):
+            required.add((match.group(2).lower(), match.group(1).lower()))
+    with connection.cursor() as cursor:
+        cursor.execute('SELECT TABLE_NAME AS object_name, INDEX_NAME AS index_name '
+                       'FROM information_schema.statistics WHERE table_schema=DATABASE()')
+        present = {(str(field(row, 'object_name')).lower(), str(field(row, 'index_name')).lower())
+                   for row in cursor.fetchall()}
+    return sorted(required - present)
+
+
 def duplicate_work_email_count(connection, has_work_email: bool) -> int:
     # This query returns a count only. No account credentials or emails are retrieved.
     expression = "LOWER(COALESCE(NULLIF(TRIM(work_email), ''), email))" if has_work_email else 'LOWER(email)'
@@ -209,12 +225,15 @@ def main(argv=None) -> int:
             try:
                 database, existing, columns = database_inventory(raw)
                 missing_tables, missing_columns = compare(required, existing, columns)
+                absent_indexes = missing_standalone_indexes(raw)
                 print(f'MySQL database: {database}; existing tables: {len(existing)}; expected: {len(required)}')
                 if missing_tables:
                     print('MISSING TABLES:', ', '.join(missing_tables))
                 for table, column in missing_columns:
                     print('MISSING COLUMN:', f'{table}.{column}')
-                if args.install and (missing_tables or missing_columns):
+                for table, name in absent_indexes:
+                    print('MISSING STANDALONE INDEX:', f'{table}.{name}')
+                if args.install and (missing_tables or missing_columns or absent_indexes):
                     verify_preflight(raw, required, args.expected_database)
                     print('Applying approved CREATE TABLE IF NOT EXISTS, missing indexes and work_email migration...')
                     # import explicitly; only this opt-in path makes DDL changes
@@ -223,7 +242,8 @@ def main(argv=None) -> int:
                     print('MySQL DDL completed; no DROP / TRUNCATE / DELETE used.')
                     _, existing, columns = database_inventory(raw)
                     missing_tables, missing_columns = compare(required, existing, columns)
-                if missing_tables or missing_columns:
+                    absent_indexes = missing_standalone_indexes(raw)
+                if missing_tables or missing_columns or absent_indexes:
                     print('FAIL: Schema is incomplete. Back up and use INSTALL_FULL_MYSQL_SCHEMA.bat only with approval.')
                     return 2
                 print('PASS: all tables and columns exist')

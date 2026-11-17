@@ -115,6 +115,14 @@ def review_expense(expense_id:int,body:ExpenseReviewIn,user=Depends(require_hr))
         if not expense:fail(404,'Expense claim not found')
         if expense['employee_id']==user['id']:fail(403,'You cannot review your own expense')
         if expense['status']!='Pending':fail(409,'Only pending claims may be reviewed')
+        # Policy validation on submission protects new claims; preserve valid legacy
+        # records, but do not allow approval without a required receipt reference.
+        from expense_management import read_policy
+        policy=read_policy(c)['settings']
+        if body.decision=='Approved' and policy['receipt_required'] and float(expense['amount']) >= policy['receipt_threshold']:
+            detail=c.execute('SELECT receipt_reference FROM expense_claim_details WHERE expense_id=?',(expense_id,)).fetchone()
+            if not detail or not detail['receipt_reference'].strip():
+                fail(409,'An expense receipt reference is required before approval')
         c.execute('UPDATE expenses SET status=? WHERE id=?',(body.decision,expense_id))
         c.execute('INSERT INTO expense_review_events(expense_id,reviewer_id,decision,reason,reviewed_at) VALUES(?,?,?,?,?)',
                   (expense_id,user['id'],body.decision,body.reason,clock()))
