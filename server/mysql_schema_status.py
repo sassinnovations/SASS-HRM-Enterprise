@@ -1,55 +1,42 @@
-"""Read-only administrator schema status; tolerant of MySQL metadata key casing."""
-from fastapi import Depends
+"""HR-admin read-only database diagnostics; no automatic MySQL schema changes."""
+import os
+from fastapi import Depends, HTTPException
 from main import app, db, DB_ENGINE, require_hr
 from schema_audit import field
 
 
 @app.get('/api/admin/database/status')
-def database_status(user=Depends(require_hr)):
+def database_status(probe_tables: bool = False, user=Depends(require_hr)):
+    if DB_ENGINE == 'mysql':
+        from mysql_backend import raw_mysql_connection
+        from mysql_connection_audit import inspect_mysql_connection
+        connection = None
+        try:
+            connection = raw_mysql_connection()  # Bypass mysql_db's schema installer.
+            return inspect_mysql_connection(
+                connection, os.getenv('MYSQL_DATABASE', 'sass_hrm'), probe_tables=probe_tables
+            )
+        except ValueError as exc:
+            raise HTTPException(503, str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(503, 'MySQL verification failed. Check connectivity and run the read-only schema checker.') from exc
+        finally:
+            if connection is not None:
+                connection.close()
+
+    # SQLite is allowed only for isolated tests, never deployed production.
     with db() as connection:
-        if DB_ENGINE == 'mysql':
-            table_rows = connection.execute('''SELECT TABLE_NAME AS object_name
-                FROM information_schema.tables
-                WHERE table_schema=DATABASE() AND table_type='BASE TABLE'
-                ORDER BY TABLE_NAME''').fetchall()
-            tables = [str(field(row, 'object_name')).lower() for row in table_rows]
-            version = 0
-            if 'schema_migrations' in tables:
-                migration = connection.execute('SELECT MAX(version) AS version FROM schema_migrations').fetchone()
-                if migration is not None:
-                    version = field(migration, 'version') or 0
-        else:
-            table_rows = connection.execute('''SELECT name FROM sqlite_master
-                WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name''').fetchall()
-            tables = [str(field(row, 'name')).lower() for row in table_rows]
-            version = 'sqlite-development'
-        missing_tables, missing_columns, expected_count = [], [], None
-        if DB_ENGINE == 'mysql':
-            from schema_audit import get_required_schema
-            expected = get_required_schema()
-            expected_count = len(expected)
-            present = set(tables)
-            missing_tables = sorted(set(expected) - present)
-            column_rows = connection.execute('''SELECT TABLE_NAME AS object_name,
-                COLUMN_NAME AS column_name FROM information_schema.columns
-                WHERE table_schema=DATABASE()''').fetchall()
-            existing_columns = {(str(field(row, 'object_name')).lower(),
-                                 str(field(row, 'column_name')).lower()) for row in column_rows}
-            missing_columns = sorted(f'{table}.{column}' for table, required_columns in expected.items()
-                                     if table in present for column in required_columns
-                                     if (table, column) not in existing_columns)
-        present = set(tables)
-        return {'engine': DB_ENGINE, 'schema_version': version, 'table_count': len(tables),
-                'expected_table_count': expected_count,
-                'schema_complete': not missing_tables and not missing_columns if DB_ENGINE == 'mysql' else None,
-                'missing_tables': missing_tables, 'missing_columns': missing_columns,
-                'modules': {'employees': 'employees' in present,
-                            'attendance': 'attendance' in present,
-                            'leave': 'leave_requests' in present,
-                            'payroll': 'pay_runs_v2' in present,
-                            'tax_reference': 'salary_packages' in present,
-                            'recruitment': 'candidates' in present,
-                            'documents': 'document_vault' in present,
-                            'auditing': 'audit_events' in present,
-                            'account_recovery': 'password_reset_tokens' in present},
-                'tables': tables}
+        table_rows = connection.execute('''SELECT name FROM sqlite_master
+            WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name''').fetchall()
+        tables = [str(field(row, 'name')).lower() for row in table_rows]
+    return {'engine': DB_ENGINE, 'database_reachable': True, 'schema_version': 'sqlite-development',
+            'table_count': len(tables), 'expected_table_count': None,
+            'schema_complete': None, 'missing_tables': [], 'missing_columns': [],
+            'missing_indexes': [], 'missing_foreign_keys': [],
+            'table_access_probed': False, 'table_access_passed': None,
+            'table_access_failures': [], 'schema_only_table_count': None,
+            'schema_only_tables': [], 'pre_expansion_table_count': None,
+            'modules': {'employees': 'employees' in tables,
+                        'attendance_and_leave': 'attendance' in tables,
+                        'payroll': 'payslips' in tables,
+                        'candidate_search': 'candidates' in tables}, 'tables': tables}

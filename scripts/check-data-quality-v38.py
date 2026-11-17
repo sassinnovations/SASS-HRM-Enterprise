@@ -13,7 +13,7 @@ assert 'Depends(require_hr)' in source and source.count('Depends(require_hr)')>=
 assert 'SELECT * FROM employees' not in source and 'SELECT * FROM leave_requests' not in source and 'SELECT * FROM tickets' not in source
 assert 'useRefreshData(load)' in (base/'web/src/DataQualityCenter.tsx').read_text()
 assert 'Refresh data</button>' not in (base/'web/src/DataQualityCenter.tsx').read_text()
-assert 'const FRONTEND_RELEASE=\'4.5.0\'' in (base/'web/src/AdminSetup.tsx').read_text()
+assert 'const FRONTEND_RELEASE=\'4.8.0\'' in (base/'web/src/AdminSetup.tsx').read_text()
 sys.path.insert(0,str(base/'server'))
 from schema_audit import get_required_schema, source_coverage
 required=get_required_schema()

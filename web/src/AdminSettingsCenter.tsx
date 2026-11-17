@@ -1,7 +1,7 @@
 import {hrmFetch} from './apiTransport';
 import {useRefreshData} from './useRefreshData';
 import {useCallback,useEffect,useMemo,useState} from 'react';
-import {AlertCircle,ArrowRight,Building2,CalendarDays,CheckCircle2,ClipboardCheck,FileText,RotateCcw,Save,Settings2,ShieldCheck,SlidersHorizontal,UsersRound,WalletCards} from 'lucide-react';
+import {AlertCircle,ArrowRight,Building2,CalendarDays,CheckCircle2,ClipboardCheck,FileText,RotateCcw,Save,Settings2,ShieldCheck,UploadCloud,SlidersHorizontal,UsersRound,WalletCards} from 'lucide-react';
 import './admin-settings-center.css';
 
 type Settings = {
@@ -73,6 +73,7 @@ async function api<T>(path:string,method='GET',body?:unknown):Promise<T>{
 }
 const pages:{key:string;name:string;description:string;icon:typeof Settings2;checks:string[]}[]=[
  {key:'orgsettings',name:'Organization settings',description:'Workspace identity, offices, timezone and reporting preferences.',icon:Building2,checks:['organization_preferences','office_directory']},
+ {key:'vault',name:'Secure file uploads & vault',description:'Open the private employee file vault and check whether encryption and malware scanning are ready.',icon:UploadCloud,checks:[]},
  {key:'companysetup',name:'Company setup & import',description:'Company profile, departments, leave entitlements and HR policies.',icon:ClipboardCheck,checks:['company_identity','department_structure','leave_entitlements','published_policies']},
  {key:'workflowsettings',name:'Workflow settings',description:'HR helpdesk response and task/onboarding warning guidance.',icon:SlidersHorizontal,checks:['workflow_guidance']},
  {key:'coverage',name:'Team leave & coverage planner',description:'View approved team leave, office holidays, and set advisory coverage warning thresholds.',icon:CalendarDays,checks:[]},
@@ -87,13 +88,14 @@ const pages:{key:string;name:string;description:string;icon:typeof Settings2;che
 
 export function AdminSettingsCenter({mode,navigate}:{mode:'center'|'talent';navigate:(page:string)=>void}){
   const [overview,setOverview]=useState<Overview|null>(null);
+  const [vaultReady,setVaultReady]=useState<boolean|null>(null);
   const [saved,setSaved]=useState<Entry|null>(null);
   const [editing,setEditing]=useState<Settings>(defaults);
   const [busy,setBusy]=useState(false);const [error,setError]=useState('');const [notice,setNotice]=useState('');
   const load=useCallback(async()=>{
     setBusy(true);setError('');
     try{
-      if(mode==='center')setOverview(await api<Overview>('/admin/settings/overview'));
+      if(mode==='center'){const [overview,status]=await Promise.all([api<Overview>('/admin/settings/overview'),api<{enabled:boolean}>('/vault/status')]);setOverview(overview);setVaultReady(status.enabled)}
       else{const result=await api<Entry>('/admin/settings/talent');setSaved(result);setEditing(result.settings)}
     }catch(e){setError((e as Error).message)}finally{setBusy(false)}
   },[mode]);
@@ -112,7 +114,7 @@ export function AdminSettingsCenter({mode,navigate}:{mode:'center'|'talent';navi
     {notice&&<div className="asc-alert success" role="status"><CheckCircle2 size={18}/>{notice}</div>}
     {mode==='center'?<>
       <div className="asc-summary"><div className="asc-summary-icon"><Settings2 size={23}/></div><div><h2>Workspace configuration</h2><p>{overview?`${overview.configured} of ${overview.total} setup indicators contain saved records.`:'Checking saved organization settings...'}</p><small>These indicators measure setup records, not legal compliance, security approval or production readiness.</small></div></div>
-      <div className="asc-grid">{pages.map(item=>{const Icon=item.icon;const hasStatus=Boolean(item.checks.length&&overview);const configured=item.checks.length?item.checks.every(k=>overview?.sections[k]):false;return <button key={item.key} type="button" className="asc-navigation" onClick={()=>navigate(item.key)}><span className="asc-icon"><Icon size={21}/></span><span className="asc-nav-body"><strong>{item.name}</strong><small>{item.description}</small>{hasStatus&&<em className={configured?'ok':'pending'}>{configured?'Settings present':'Setup remaining'}</em>}</span><ArrowRight size={17}/></button>})}</div>
+      <div className="asc-grid">{pages.map(item=>{const Icon=item.icon;const isVault=item.key==='vault';const hasStatus=isVault?vaultReady!==null:Boolean(item.checks.length&&overview);const configured=isVault?vaultReady===true:item.checks.length?item.checks.every(k=>overview?.sections[k]):false;return <button key={item.key} type="button" className="asc-navigation" onClick={()=>navigate(item.key)}><span className="asc-icon"><Icon size={21}/></span><span className="asc-nav-body"><strong>{item.name}</strong><small>{item.description}</small>{hasStatus&&<em className={configured?'ok':'pending'}>{isVault?(configured?'Vault upload ready':'Vault configuration needed'):(configured?'Settings present':'Setup remaining')}</em>}</span><ArrowRight size={17}/></button>})}</div>
       <div className="asc-info"><ShieldCheck size={20}/><span>Administrator-only access is checked by the API. Only changed setting names are recorded in the audit log; passwords, JWT signing keys and employee records are not displayed here.</span></div>
     </>:<>
       <div className="asc-info"><ShieldCheck size={20}/><span><strong>Operational guidance only.</strong> Saving these settings changes the values shown to HR for planning; it does not send mail, activate escalations, delete records, grant permissions or execute payroll. Use the existing HRM workflows for those actions.</span></div>

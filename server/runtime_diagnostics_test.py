@@ -11,6 +11,6 @@ with tempfile.TemporaryDirectory() as tmp:
  with TestClient(main.app) as client:
   status=client.get('/api/health').json()
   assert status['status']=='ok' and status['database']=='sqlite'
-  assert status['version']==main.app.version=='4.5.0'
+  assert status['version']==main.app.version=='4.8.0'
   assert client.get('/api/admin/setup/overview').status_code==401
   print('PASS: backend version visible through health; protected setup endpoint; isolated SQLite test only')

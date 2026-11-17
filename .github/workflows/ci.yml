@@ -20,24 +20,26 @@ jobs:
           python scripts/verify-v21-ui.py
           python scripts/verify-v23-connection.py
           python scripts/verify-v24-package.py
+          python scripts/check-feature-pages.py
+          python scripts/check-page-routing.py
+          python scripts/check-single-refresh.py
+          python scripts/check-cross-module-reliability.py
       - name: Verify complete MySQL table schema declarations
         run: |
           python schema_audit.py --file-only
           python full_mysql_schema_test.py
-      - run: SASS_HRM_TESTING=1 DB_ENGINE=sqlite JWT_SECRET=test-only-strong-secret-string-0123456789-abcdef python runtime_diagnostics_test.py
-      - run: SASS_HRM_TESTING=1 DB_ENGINE=sqlite JWT_SECRET=test-only-strong-secret-string-0123456789-abcdef python real_baseline_test.py
-      - run: SASS_HRM_TESTING=1 DB_ENGINE=sqlite JWT_SECRET=test-only-strong-secret-string-0123456789-abcdef python admin_developer_test.py
-      - run: SASS_HRM_TESTING=1 DB_ENGINE=sqlite JWT_SECRET=test-only-strong-secret-string-0123456789-abcdef python merged_release_test.py
-      - run: SASS_HRM_TESTING=1 DB_ENGINE=sqlite JWT_SECRET=test-only-strong-secret-string-0123456789-abcdef python culture_suite_test.py
-      - run: SASS_HRM_TESTING=1 DB_ENGINE=sqlite JWT_SECRET=test-only-strong-secret-string-0123456789-abcdef python culture_ops_test.py
-      - run: SASS_HRM_TESTING=1 DB_ENGINE=sqlite JWT_SECRET=test-only-strong-secret-string-0123456789-abcdef python organization_setup_test.py
-      - run: SASS_HRM_TESTING=1 DB_ENGINE=sqlite JWT_SECRET=test-only-strong-secret-string-0123456789-abcdef python talent_ops_test.py
-      - run: SASS_HRM_TESTING=1 DB_ENGINE=sqlite JWT_SECRET=test-only-strong-secret-string-0123456789-abcdef python compensation_ops_test.py
-      - run: SASS_HRM_TESTING=1 DB_ENGINE=sqlite JWT_SECRET=test-only-strong-secret-string-0123456789-abcdef python employee_services_v20_test.py
-      - run: SASS_HRM_TESTING=1 DB_ENGINE=sqlite JWT_SECRET=test-only-strong-secret-string-0123456789-abcdef python route_audit_test.py
-      - run: SASS_HRM_TESTING=1 DB_ENGINE=sqlite JWT_SECRET=test-only-strong-secret-string-0123456789-abcdef python exports_v24_test.py
-      - run: SASS_HRM_TESTING=1 DB_ENGINE=sqlite JWT_SECRET=test-only-strong-secret-string-0123456789-abcdef python accounts_v25_test.py
-      - run: SASS_HRM_TESTING=1 DB_ENGINE=sqlite JWT_SECRET=test-only-strong-secret-string-0123456789-abcdef python mysql_schema_status_test.py
+          python database_feature_coverage.py --check
+          python ../scripts/verify-saritha-merge.py
+      - name: Run every backend feature regression test (isolated SQLite)
+        env:
+          SASS_HRM_TESTING: '1'
+          DB_ENGINE: sqlite
+          JWT_SECRET: test-only-strong-secret-string-0123456789-abcdef
+        run: |
+          for test_file in *_test.py; do
+            echo "Running $test_file"
+            python "$test_file"
+          done
   frontend:
     runs-on: ubuntu-latest
     defaults:

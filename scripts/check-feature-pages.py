@@ -9,17 +9,17 @@ import re,csv,sys
 ROOT=Path(__file__).resolve().parent.parent
 app=(ROOT/'web/src/App.tsx').read_text(encoding='utf-8')
 routes=(ROOT/'web/src/pageRoutes.ts').read_text(encoding='utf-8')
-hosting=(ROOT/'web/vercel.json').read_text(encoding='utf-8')
+nginx=(ROOT/'docker/nginx.conf').read_text(encoding='utf-8')
 menu_body=re.search(r'const menus:MenuItem\[\]=\[(.*?)\];',app,re.S)
 groups_body=re.search(r'const menuGroups:.*?=\[(.*?)\];',app,re.S)
 assert menu_body and groups_body,'Menu or navigation groups not found'
 items=[dict(key=m.group(1),label=m.group(2),restriction=m.group(3) or '') for m in re.finditer(r"\{key:'([^']+)',label:'([^']+)',icon:[^,}\n]+(?:,only:'(admin|management)')?\}",menu_body.group(1))]
 paths=dict(re.findall(r"^\s*([a-z][a-z0-9]*):\s*'(/[^']+)'",routes,re.M))
-assert len(items)==70,(len(items),'expected exactly the 70 modules')
+assert len(items)==73,(len(items),'expected exactly 73 modules')
 assert set(v['key'] for v in items)==set(paths), 'Menu does not match the route registry'
 assert len(set(paths.values()))==len(paths), 'Repeated URLs'
 assert all(re.fullmatch(r'/[a-z]+/[a-z0-9]+(?:-[a-z0-9]+)*',url) for url in paths.values()),'Unsafe URL pattern'
-assert '"destination": "/index.html"' in hosting, 'Direct-route reload fallback missing'
+assert 'try_files $uri $uri/ /index.html' in nginx, 'Nginx direct-route reload fallback missing'
 assert "setRouteError({kind:'forbidden'" in app and "setRouteError({kind:'not-found'" in app, 'Deep-link error screens missing'
 assert "page==='__unavailable__'&&routeError" in app, 'Direct-link error view is not rendered'
 assert 'window.addEventListener(\'popstate\'' in app and 'window.history.pushState' in app,'Browser history navigation missing'
@@ -82,9 +82,9 @@ for item in items:
               'Access':('Administrator' if item['restriction']=='admin' else 'Management' if item['restriction']=='management' else 'Authenticated user'),
               'Screen source':'web/src/'+module,'Navigation / screen source check':'Passed',
               'Live UI and workflow check':'Not tested — requires running Docker/browser and real role accounts'})
-assert len(rows)==70
+assert len(rows)==73
 if '--csv' in sys.argv:
- target=ROOT/'docs/SASS_HRM_70_PAGE_CHECKLIST.csv'
+ target=ROOT/'docs/SASS_HRM_73_PAGE_CHECKLIST.csv'
  target.parent.mkdir(parents=True,exist_ok=True)
  with target.open('w',encoding='utf-8-sig',newline='') as f:
   writer=csv.DictWriter(f,fieldnames=list(rows[0]));writer.writeheader();writer.writerows(rows)

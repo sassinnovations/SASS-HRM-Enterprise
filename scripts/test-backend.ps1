@@ -95,8 +95,8 @@ Write-Host "v4.3 account profiles, aliases, password safety, roles and audit pas
 if($LASTEXITCODE -ne 0){throw "v4.4 profile photo privacy and safe-delete tests failed"}
 
 & $python schema_repair_v441_test.py
-if($LASTEXITCODE -ne 0){throw 'v4.5.0 read-only schema audit and repair preflight tests failed'}
-Write-Host 'v4.5.0 metadata casing and schema repair safety regression passed' -ForegroundColor Green
+if($LASTEXITCODE -ne 0){throw 'v4.8.0 read-only schema audit and repair preflight tests failed'}
+Write-Host 'v4.8.0 metadata casing and schema repair safety regression passed' -ForegroundColor Green
 
 & $python mysql_schema_status_test.py
 if($LASTEXITCODE -ne 0){throw 'MySQL and SQLite administrator database-status regression failed'}
@@ -105,3 +105,19 @@ Write-Host 'Administrator schema status supports SQLite row types and MySQL meta
 & $python security_center_v45_test.py
 if($LASTEXITCODE -ne 0){throw 'v4.5 account login security, privacy and revocation regression failed'}
 Write-Host 'v4.5 account security regression passed' -ForegroundColor Green
+
+& $python signup_v46_test.py
+if($LASTEXITCODE -ne 0){throw 'v4.6 public registration and administrator approval regression failed'}
+Write-Host 'v4.6 pending sign-up and account approval regression passed' -ForegroundColor Green
+
+& $python file_upload_settings_test.py
+if($LASTEXITCODE -ne 0){throw 'Secure file upload: scan, encryption, permissions or download/delete regression failed'}
+Write-Host 'Secure vault upload/settings and simulated ClamAV protocol regression passed' -ForegroundColor Green
+
+& $python candidate_library_test.py
+if($LASTEXITCODE -ne 0){throw 'v4.9 candidate Excel import, search/sort and CRUD regression failed'}
+Write-Host 'Candidate zero-preload, synthetic Excel import/search/CRUD, and controlled clear passed' -ForegroundColor Green
+
+# v5.2 multi-method attendance safeguards (photo, device signed events, HR manual entry)
+& $python biometric_attendance_test.py
+if($LASTEXITCODE -ne 0){throw 'v5.2 attendance modality regression failed'}

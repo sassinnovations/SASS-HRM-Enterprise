@@ -60,3 +60,5 @@ A healthy MySQL connection alone **does not** verify payroll rules, every author
 - MySQL schema is created by idempotent DDL plus migration markers. Review and adopt a proper migration framework for production upgrades. Do not run a test migration against real employee records without a backup and rehearsal.
 - The vault still requires both encryption and a running ClamAV scanner; the Compose stack does not turn these on automatically.
 - A full authenticated browser click-through requires user-authorized credentials in the local browser audit script. No credentials are bundled.
+
+> Update (current package): For freshly provisioned environments, the Docker Compose definitions now contain a ClamAV service and the setup script generates a vault key. The statement above describes the older v2.2 release, not current installer behavior. See `FILE_UPLOAD_QA_AND_SETUP.md`.

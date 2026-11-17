@@ -10,7 +10,7 @@ from mysql_backend import split_ddl
 
 ROOT=Path(__file__).resolve().parent.parent
 required=get_required_schema()
-assert len(required)==105, f'Expected 105 tables; got {len(required)}'
+assert len(required)==241, f'Expected 241 tables; got {len(required)}'
 assert len({c for cols in required.values() for c in cols})>30
 assert sum(map(len,required.values()))>=640
 assert not source_coverage(required), source_coverage(required)
@@ -25,7 +25,11 @@ assert {'employee_id','mime_type','photo_bytes','updated_at'} <= required['profi
 assert {'id','employee_id','created_at'} <= required['account_login_events']
 assert {'employee_id','basic','hra','tax_regime'} <= required['salary_packages']
 assert {'employee_id','work_day','proposed_in','proposed_out'} <= required['attendance_corrections']
+assert {'employee_id','work_day','event_type','method','occurred_at'} <= required['attendance_capture_events']
+assert {'event_id','ciphertext','expires_at'} <= required['attendance_photo_evidence']
+assert {'device_id','nonce','used_at'} <= required['attendance_device_nonces']
 assert {'id','settings_json'} <= required['compensation_workflow_settings']
+assert {'stage','checklist_json','instructions','reviewer_role','sla_days','note_min_chars'} <= required['hiring_stage_settings']
 
 main_sql=(ROOT/'server/mysql_schema.sql').read_bytes()
 manual_sql=(ROOT/'database/01_application_schema.sql').read_bytes()
@@ -57,3 +61,5 @@ assert {"employee_id","title","due_on","created_by","completed_at"} <= required[
 
 assert {'employee_id','title','visibility','archived'} <= required['performance_evidence']
 assert {'goal_id','author_id','summary','created_at'} <= required['performance_goal_checkins']
+
+assert {'enabled','allow_employee','allow_hr_subadmin','allow_admin','allowed_email_domain'} <= required['account_signup_settings']

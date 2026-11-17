@@ -1,0 +1,242 @@
+Table,Schema category,Direct backend SQL reference,Referencing modules,Workflow certification
+account_access_tiers,Existing HRM schema,Yes,"accounts_v25.py, main.py, platform_plus.py",Not established by schema audit
+account_invites,Existing HRM schema,Yes,"accounts_v25.py, platform_plus.py",Not established by schema audit
+account_login_events,Existing HRM schema,Yes,security_center_v45.py,Not established by schema audit
+account_signup_requests,Existing HRM schema,Yes,signup_v46.py,Not established by schema audit
+account_signup_settings,Existing HRM schema,Yes,signup_v46.py,Not established by schema audit
+announcements,Existing HRM schema,Yes,enterprise.py,Not established by schema audit
+archived_notifications,Existing HRM schema,Yes,"enterprise.py, workspace_v30.py",Not established by schema audit
+asset_custody_acknowledgements,Database foundation only,No,,Not established by schema audit
+asset_disposal_approvals,Database foundation only,No,,Not established by schema audit
+asset_inspections,Existing HRM schema,Yes,asset_management.py,Not established by schema audit
+asset_lifecycle_events,Existing HRM schema,Yes,"asset_management.py, employee_services_v20.py",Not established by schema audit
+asset_maintenance_requests,Database foundation only,Yes,asset_management.py,Not established by schema audit
+asset_profiles,Existing HRM schema,Yes,asset_management.py,Not established by schema audit
+asset_return_confirmations,Database foundation only,No,,Not established by schema audit
+assets,Existing HRM schema,Yes,"asset_management.py, employee_services_v20.py, enterprise.py, main.py",Not established by schema audit
+attendance,Existing HRM schema,Yes,"biometric_attendance.py, exports_v24.py, main.py, operations_v09.py, workflows_v07.py",Not established by schema audit
+attendance_break_logs,Database foundation only,No,,Not established by schema audit
+attendance_capture_events,Existing HRM schema,Yes,biometric_attendance.py,Not established by schema audit
+attendance_corrections,Existing HRM schema,Yes,"advanced.py, compensation_ops.py, main.py, operations_v09.py",Not established by schema audit
+attendance_device_clock_drift_logs,Database foundation only,No,,Not established by schema audit
+attendance_device_employee_links,Database foundation only,No,,Not established by schema audit
+attendance_device_maintenance_cases,Database foundation only,No,,Not established by schema audit
+attendance_device_nonces,Existing HRM schema,Yes,biometric_attendance.py,Not established by schema audit
+attendance_device_registry,Database foundation only,No,,Not established by schema audit
+attendance_exception_approval_steps,Database foundation only,No,,Not established by schema audit
+attendance_exception_reviews,Database foundation only,No,,Not established by schema audit
+attendance_manual_punch_approvals,Database foundation only,No,,Not established by schema audit
+attendance_missing_punch_cases,Database foundation only,No,,Not established by schema audit
+attendance_overtime_requests,Database foundation only,No,,Not established by schema audit
+attendance_photo_evidence,Existing HRM schema,Yes,biometric_attendance.py,Not established by schema audit
+attendance_remote_work_reviews,Database foundation only,No,,Not established by schema audit
+attendance_roster_change_reviews,Database foundation only,No,,Not established by schema audit
+attendance_roster_publications,Database foundation only,No,,Not established by schema audit
+attendance_shift_change_requests,Database foundation only,No,,Not established by schema audit
+attendance_shift_swap_requests,Database foundation only,No,,Not established by schema audit
+audit_events,Existing HRM schema,Yes,"exports_v24.py, main.py",Not established by schema audit
+benefit_enrollments,Existing HRM schema,Yes,"advanced.py, compensation_ops.py, main.py",Not established by schema audit
+benefit_plans,Existing HRM schema,Yes,"advanced.py, compensation_ops.py, main.py",Not established by schema audit
+benefit_verification_events,Existing HRM schema,Yes,compensation_ops.py,Not established by schema audit
+candidate_activity,Existing HRM schema,Yes,talent_ops.py,Not established by schema audit
+candidate_application_source_records,Database foundation only,No,,Not established by schema audit
+candidate_assessment_results,Database foundation only,No,,Not established by schema audit
+candidate_consent_events,Database foundation only,No,,Not established by schema audit
+candidate_duplicate_review_cases,Database foundation only,No,,Not established by schema audit
+candidate_import_batches,Existing HRM schema,Yes,"candidate_library.py, mysql_backend.py",Not established by schema audit
+candidate_import_chunks,Existing HRM schema,Yes,candidate_library.py,Not established by schema audit
+candidate_interview_feedback,Database foundation only,No,,Not established by schema audit
+candidate_offer_approvals,Database foundation only,No,,Not established by schema audit
+candidate_offer_document_reviews,Database foundation only,No,,Not established by schema audit
+candidate_profiles,Existing HRM schema,Yes,candidate_library.py,Not established by schema audit
+candidate_reference_check_reviews,Database foundation only,No,,Not established by schema audit
+candidate_stage_sla_cases,Database foundation only,No,,Not established by schema audit
+candidates,Existing HRM schema,Yes,"advanced.py, candidate_library.py, enterprise.py, hiring_pipeline.py, main.py, talent_ops.py",Not established by schema audit
+career_milestones,Existing HRM schema,Yes,culture_suite.py,Not established by schema audit
+career_plans,Existing HRM schema,Yes,"culture_suite.py, main.py",Not established by schema audit
+compensation_workflow_settings,Existing HRM schema,Yes,compensation_settings_v32.py,Not established by schema audit
+compliance_control_attestations,Database foundation only,No,,Not established by schema audit
+compliance_evidence_register,Database foundation only,No,,Not established by schema audit
+courses,Existing HRM schema,Yes,"culture_ops.py, enterprise.py, main.py",Not established by schema audit
+culture_case_status_history,Existing HRM schema,Yes,"culture_ops.py, culture_suite.py",Not established by schema audit
+data_access_review_cases,Database foundation only,No,,Not established by schema audit
+data_retention_rules,Database foundation only,No,,Not established by schema audit
+departments,Existing HRM schema,Yes,"enterprise.py, organization_setup.py",Not established by schema audit
+developer_grants,Existing HRM schema,Yes,"accounts_v25.py, create_admin.py, developer_access.py, main.py, platform_plus.py",Not established by schema audit
+discipline_case_responses,Existing HRM schema,Yes,culture_suite.py,Not established by schema audit
+discipline_cases,Existing HRM schema,Yes,culture_suite.py,Not established by schema audit
+document_review_events,Existing HRM schema,Yes,employee_services_v20.py,Not established by schema audit
+document_vault,Existing HRM schema,Yes,"main.py, operations_v09.py",Not established by schema audit
+documents,Existing HRM schema,Yes,"employee_services_v20.py, enterprise.py",Not established by schema audit
+employee_assignment_handover_checklists,Database foundation only,No,,Not established by schema audit
+employee_certifications,Database foundation only,No,,Not established by schema audit
+employee_contact_change_reviews,Database foundation only,No,,Not established by schema audit
+employee_contract_renewal_requests,Database foundation only,No,,Not established by schema audit
+employee_data_export_requests,Database foundation only,No,,Not established by schema audit
+employee_delegation_assignments,Database foundation only,No,,Not established by schema audit
+employee_education_records,Database foundation only,No,,Not established by schema audit
+employee_emergency_contacts,Database foundation only,No,,Not established by schema audit
+employee_employment_letter_register,Database foundation only,No,,Not established by schema audit
+employee_exit_clearance_signoffs,Database foundation only,No,,Not established by schema audit
+employee_exit_interviews,Database foundation only,No,,Not established by schema audit
+employee_hr_case_consents,Database foundation only,No,,Not established by schema audit
+employee_inbox_preferences,Existing HRM schema,Yes,workspace_v30.py,Not established by schema audit
+employee_internal_mobility_applications,Database foundation only,No,,Not established by schema audit
+employee_job_history,Database foundation only,No,,Not established by schema audit
+employee_license_renewals,Database foundation only,No,,Not established by schema audit
+employee_manager_assignments,Database foundation only,No,,Not established by schema audit
+employee_personnel_actions,Database foundation only,No,,Not established by schema audit
+employee_policy_version_acceptances,Database foundation only,No,,Not established by schema audit
+employee_position_assignments,Database foundation only,No,,Not established by schema audit
+employee_preferences,Existing HRM schema,Yes,employee_services_v20.py,Not established by schema audit
+employee_probation_action_items,Database foundation only,No,,Not established by schema audit
+employee_probation_reviews,Database foundation only,No,,Not established by schema audit
+employee_saved_searches,Existing HRM schema,Yes,global_search_v37.py,Not established by schema audit
+employee_skill_gap_reviews,Database foundation only,No,,Not established by schema audit
+employee_skills,Existing HRM schema,Yes,"main.py, platform_plus.py",Not established by schema audit
+employee_training_compliance_cases,Database foundation only,No,,Not established by schema audit
+employee_transfer_requests,Database foundation only,No,,Not established by schema audit
+employee_voice_cases,Existing HRM schema,Yes,culture_suite.py,Not established by schema audit
+employee_voice_messages,Existing HRM schema,Yes,culture_suite.py,Not established by schema audit
+employee_work_authorization_documents,Database foundation only,No,,Not established by schema audit
+employee_work_authorization_reviews,Database foundation only,No,,Not established by schema audit
+employee_workspace_shortcuts,Existing HRM schema,Yes,self_service_v31.py,Not established by schema audit
+employees,Existing HRM schema,Yes,"accounts_v25.py, admin_settings_v34.py, advanced.py, asset_management.py, biometric_attendance.py, calendar_v27.py, compensation_ops.py, compensation_settings_v32.py, create_admin.py, culture_ops.py, culture_suite.py, data_quality_import.py, data_quality_v38.py, employee_services_v20.py, enterprise.py, expense_management.py, global_search_v37.py, hiring_pipeline.py, main.py, mysql_backend.py, operations_v09.py, organization_settings_v26.py, organization_setup.py, payroll_plus.py, performance_actions_v41.py, performance_growth_v40.py, performance_journal_v42.py, performance_v39.py, platform_plus.py, profile_v29.py, security_center_v45.py, self_service_v31.py, signup_v46.py, talent_ops.py, workflow_reminders_v35.py, workflows_v07.py, workforce_planning_v36.py, workspace_v30.py",Not established by schema audit
+employment_contract_versions,Database foundation only,No,,Not established by schema audit
+enrollments,Existing HRM schema,Yes,"culture_ops.py, enterprise.py, main.py",Not established by schema audit
+expense_claim_details,Existing HRM schema,Yes,"compensation_ops.py, enterprise.py, expense_management.py",Not established by schema audit
+expense_claim_events,Existing HRM schema,Yes,expense_management.py,Not established by schema audit
+expense_policy_settings,Existing HRM schema,Yes,expense_management.py,Not established by schema audit
+expense_reimbursement_records,Existing HRM schema,Yes,"enterprise.py, expense_management.py",Not established by schema audit
+expense_review_events,Existing HRM schema,Yes,"compensation_ops.py, expense_management.py",Not established by schema audit
+expenses,Existing HRM schema,Yes,"advanced.py, compensation_ops.py, enterprise.py, expense_management.py, main.py, operations_v09.py, platform_plus.py",Not established by schema audit
+goal_progress_history,Existing HRM schema,Yes,"culture_ops.py, enterprise.py",Not established by schema audit
+goals,Existing HRM schema,Yes,"culture_ops.py, enterprise.py, main.py, performance_journal_v42.py",Not established by schema audit
+hiring_job_requirements,Existing HRM schema,Yes,hiring_pipeline.py,Not established by schema audit
+hiring_stage_events,Existing HRM schema,Yes,hiring_pipeline.py,Not established by schema audit
+hiring_stage_reviews,Existing HRM schema,Yes,hiring_pipeline.py,Not established by schema audit
+hiring_stage_settings,Existing HRM schema,Yes,hiring_pipeline.py,Not established by schema audit
+holidays,Existing HRM schema,Yes,"advanced.py, enterprise.py, main.py, workforce_planning_v36.py",Not established by schema audit
+hr_data_quality_import_approval_reviews,Database foundation only,No,,Not established by schema audit
+hr_data_quality_import_history,Existing HRM schema,Yes,data_quality_import.py,Not established by schema audit
+hr_data_quality_import_row_issues,Database foundation only,No,,Not established by schema audit
+hr_data_quality_import_settings,Existing HRM schema,Yes,data_quality_import.py,Not established by schema audit
+hr_data_quality_policies,Existing HRM schema,Yes,data_quality_v38.py,Not established by schema audit
+hr_data_quality_reviews,Existing HRM schema,Yes,data_quality_v38.py,Not established by schema audit
+hr_task_template_assignments,Existing HRM schema,Yes,workforce_planning_v36.py,Not established by schema audit
+hr_task_templates,Existing HRM schema,Yes,workforce_planning_v36.py,Not established by schema audit
+hr_tasks,Existing HRM schema,Yes,"advanced.py, data_quality_v38.py, main.py, talent_ops.py, workflow_reminders_v35.py, workforce_planning_v36.py, workspace_v30.py",Not established by schema audit
+hr_ticket_escalation_records,Database foundation only,No,,Not established by schema audit
+integration_connector_health_results,Database foundation only,No,,Not established by schema audit
+integration_field_mapping_revisions,Database foundation only,No,,Not established by schema audit
+integration_sync_errors,Database foundation only,No,,Not established by schema audit
+integration_sync_runs,Database foundation only,No,,Not established by schema audit
+integration_webhook_receipts,Database foundation only,No,,Not established by schema audit
+interviews,Existing HRM schema,Yes,"advanced.py, candidate_library.py, main.py",Not established by schema audit
+jobs,Existing HRM schema,Yes,"enterprise.py, hiring_pipeline.py",Not established by schema audit
+leave_accrual_ledger,Database foundation only,No,,Not established by schema audit
+leave_balance_reconciliations,Database foundation only,No,,Not established by schema audit
+leave_blackout_periods,Database foundation only,No,,Not established by schema audit
+leave_carryforward_events,Database foundation only,No,,Not established by schema audit
+leave_coverage_settings,Existing HRM schema,Yes,workforce_planning_v36.py,Not established by schema audit
+leave_encashment_requests,Database foundation only,No,,Not established by schema audit
+leave_entitlements,Existing HRM schema,Yes,"enterprise.py, main.py, platform_plus.py",Not established by schema audit
+leave_requests,Existing HRM schema,Yes,"advanced.py, data_quality_v38.py, enterprise.py, main.py, platform_plus.py, workflows_v07.py, workforce_planning_v36.py",Not established by schema audit
+leave_return_to_work_confirmations,Database foundation only,No,,Not established by schema audit
+leave_supporting_document_reviews,Database foundation only,No,,Not established by schema audit
+login_attempts,Existing HRM schema,Yes,main.py,Not established by schema audit
+notifications,Existing HRM schema,Yes,"compensation_ops.py, culture_ops.py, culture_suite.py, enterprise.py, expense_management.py, main.py, performance_actions_v41.py, performance_growth_v40.py, performance_journal_v42.py, performance_v39.py, workflow_reminders_v35.py, workspace_v30.py",Not established by schema audit
+offboarding,Existing HRM schema,Yes,"advanced.py, enterprise.py, talent_ops.py",Not established by schema audit
+offboarding_clearance,Existing HRM schema,Yes,"enterprise.py, talent_ops.py",Not established by schema audit
+onboarding,Existing HRM schema,Yes,"data_quality_v38.py, enterprise.py, main.py, operations_v09.py, talent_ops.py, workflow_reminders_v35.py, workspace_v30.py",Not established by schema audit
+onboarding_templates,Existing HRM schema,Yes,talent_ops.py,Not established by schema audit
+organization_offices,Existing HRM schema,Yes,"developer_access.py, organization_settings_v26.py, organization_setup.py",Not established by schema audit
+organization_preferences,Existing HRM schema,Yes,"organization_settings_v26.py, organization_setup.py",Not established by schema audit
+organization_profile,Existing HRM schema,Yes,"developer_access.py, organization_settings_v26.py, organization_setup.py",Not established by schema audit
+password_reset_tokens,Existing HRM schema,Yes,accounts_v25.py,Not established by schema audit
+pay_adjustments_v2,Existing HRM schema,Yes,payroll_plus.py,Not established by schema audit
+pay_items_v2,Existing HRM schema,Yes,"main.py, payroll_plus.py",Not established by schema audit
+pay_runs_v2,Existing HRM schema,Yes,"main.py, payroll_plus.py",Not established by schema audit
+payroll_approval_signoffs,Database foundation only,No,,Not established by schema audit
+payroll_component_catalog,Database foundation only,No,,Not established by schema audit
+payroll_cost_center_allocations,Database foundation only,No,,Not established by schema audit
+payroll_deduction_review_cases,Database foundation only,No,,Not established by schema audit
+payroll_disbursement_batches,Database foundation only,No,,Not established by schema audit
+payroll_disbursement_items,Database foundation only,No,,Not established by schema audit
+payroll_employee_components,Database foundation only,No,,Not established by schema audit
+payroll_employee_payment_holds,Database foundation only,No,,Not established by schema audit
+payroll_esi_eligibility_reviews,Database foundation only,No,,Not established by schema audit
+payroll_funding_approval_requests,Database foundation only,No,,Not established by schema audit
+payroll_input_change_requests,Database foundation only,No,,Not established by schema audit
+payroll_month_end_checkpoints,Database foundation only,No,,Not established by schema audit
+payroll_offcycle_run_requests,Database foundation only,No,,Not established by schema audit
+payroll_payment_exception_cases,Database foundation only,No,,Not established by schema audit
+payroll_payslip_delivery_receipts,Database foundation only,No,,Not established by schema audit
+payroll_pf_eligibility_reviews,Database foundation only,No,,Not established by schema audit
+payroll_reconciliation_issues,Database foundation only,No,,Not established by schema audit
+payroll_recovery_schedules,Database foundation only,No,,Not established by schema audit
+payroll_retro_adjustment_requests,Database foundation only,No,,Not established by schema audit
+payroll_run_events_v2,Existing HRM schema,Yes,payroll_plus.py,Not established by schema audit
+payroll_statutory_obligations,Database foundation only,No,,Not established by schema audit
+payroll_tax_document_checks,Database foundation only,No,,Not established by schema audit
+payroll_tax_residency_declarations,Database foundation only,No,,Not established by schema audit
+payroll_variance_review_cases,Database foundation only,No,,Not established by schema audit
+payslips,Existing HRM schema,Yes,"main.py, workflows_v07.py",Not established by schema audit
+performance_appraisals,Existing HRM schema,Yes,"performance_actions_v41.py, performance_v39.py",Not established by schema audit
+performance_checkins,Existing HRM schema,Yes,performance_v39.py,Not established by schema audit
+performance_development_milestones,Existing HRM schema,Yes,performance_growth_v40.py,Not established by schema audit
+performance_development_plans,Existing HRM schema,Yes,performance_growth_v40.py,Not established by schema audit
+performance_evidence,Existing HRM schema,Yes,performance_journal_v42.py,Not established by schema audit
+performance_feedback_requests,Existing HRM schema,Yes,performance_growth_v40.py,Not established by schema audit
+performance_followup_actions,Existing HRM schema,Yes,performance_actions_v41.py,Not established by schema audit
+performance_goal_checkins,Existing HRM schema,Yes,performance_journal_v42.py,Not established by schema audit
+performance_review_cycles,Existing HRM schema,Yes,"performance_actions_v41.py, performance_v39.py",Not established by schema audit
+personal_calendar_events,Existing HRM schema,Yes,"calendar_v27.py, developer_access.py",Not established by schema audit
+policies,Existing HRM schema,Yes,"enterprise.py, main.py, operations_v09.py, workflows_v07.py",Not established by schema audit
+policy_acknowledgements,Existing HRM schema,Yes,"main.py, operations_v09.py, workflows_v07.py",Not established by schema audit
+privacy_data_correction_requests,Database foundation only,No,,Not established by schema audit
+private_profiles,Existing HRM schema,Yes,"profile_v29.py, workflows_v07.py",Not established by schema audit
+professional_profiles,Existing HRM schema,Yes,profile_v29.py,Not established by schema audit
+profile_change_requests,Existing HRM schema,Yes,profile_v29.py,Not established by schema audit
+profile_photos,Existing HRM schema,Yes,profile_v29.py,Not established by schema audit
+recognition_reactions,Existing HRM schema,Yes,culture_ops.py,Not established by schema audit
+recognitions,Existing HRM schema,Yes,"advanced.py, culture_ops.py, main.py",Not established by schema audit
+recruitment_candidate_contact_queue,Database foundation only,No,,Not established by schema audit
+recruitment_candidate_document_checks,Database foundation only,No,,Not established by schema audit
+recruitment_candidate_talent_tags,Database foundation only,No,,Not established by schema audit
+recruitment_interview_panel_members,Database foundation only,No,,Not established by schema audit
+recruitment_interview_scorecards,Database foundation only,No,,Not established by schema audit
+recruitment_job_approvals,Database foundation only,No,,Not established by schema audit
+recruitment_job_skill_requirements,Database foundation only,No,,Not established by schema audit
+recruitment_offer_acceptance_events,Database foundation only,No,,Not established by schema audit
+recruitment_offer_approval_steps,Database foundation only,No,,Not established by schema audit
+recruitment_requisition_requests,Database foundation only,No,,Not established by schema audit
+recruitment_screening_responses,Database foundation only,No,,Not established by schema audit
+recruitment_screening_templates,Database foundation only,No,,Not established by schema audit
+recruitment_stage_escalation_cases,Database foundation only,No,,Not established by schema audit
+retention_hold_requests,Database foundation only,No,,Not established by schema audit
+reviews,Existing HRM schema,Yes,enterprise.py,Not established by schema audit
+salary_packages,Existing HRM schema,Yes,"compensation_ops.py, operations_v09.py, payroll_plus.py",Not established by schema audit
+schema_migrations,Existing HRM schema,Yes,mysql_backend.py,Not established by schema audit
+service_categories,Existing HRM schema,Yes,culture_suite.py,Not established by schema audit
+service_messages,Existing HRM schema,Yes,talent_ops.py,Not established by schema audit
+service_requests,Existing HRM schema,Yes,"culture_suite.py, main.py, talent_ops.py",Not established by schema audit
+shift_assignments,Existing HRM schema,Yes,"advanced.py, enterprise.py",Not established by schema audit
+shifts,Existing HRM schema,Yes,"advanced.py, enterprise.py",Not established by schema audit
+skill_catalog,Existing HRM schema,Yes,"main.py, platform_plus.py",Not established by schema audit
+survey_responses,Existing HRM schema,Yes,advanced.py,Not established by schema audit
+surveys,Existing HRM schema,Yes,advanced.py,Not established by schema audit
+talent_service_settings,Existing HRM schema,Yes,admin_settings_v34.py,Not established by schema audit
+task_comments,Existing HRM schema,Yes,"talent_ops.py, workforce_planning_v36.py",Not established by schema audit
+ticket_assignments,Existing HRM schema,Yes,"talent_ops.py, workflow_reminders_v35.py",Not established by schema audit
+ticket_messages,Existing HRM schema,Yes,platform_plus.py,Not established by schema audit
+tickets,Existing HRM schema,Yes,"data_quality_v38.py, enterprise.py, main.py, operations_v09.py, platform_plus.py, talent_ops.py, workflow_reminders_v35.py, workspace_v30.py",Not established by schema audit
+timesheet_approval_batches,Database foundation only,No,,Not established by schema audit
+timesheet_entries,Existing HRM schema,Yes,"advanced.py, compensation_ops.py, main.py",Not established by schema audit
+training_certificate_renewals,Database foundation only,No,,Not established by schema audit
+training_verification_events,Existing HRM schema,Yes,culture_ops.py,Not established by schema audit
+training_verifications,Existing HRM schema,Yes,culture_ops.py,Not established by schema audit
+work_mode_requests,Existing HRM schema,Yes,"advanced.py, main.py, workflows_v07.py",Not established by schema audit
+workflow_reminder_dispatches,Existing HRM schema,Yes,workflow_reminders_v35.py,Not established by schema audit
+workforce_headcount_plans,Database foundation only,No,,Not established by schema audit
+workspace_workflow_settings,Existing HRM schema,Yes,workspace_v30.py,Not established by schema audit

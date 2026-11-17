@@ -147,8 +147,13 @@ class OffboardState(BaseModel):
     status: Literal['Requested','Under Review','Approved','Closed']
 class ExpenseIn(BaseModel):
     title: str=Field(min_length=3,max_length=150)
-    amount: float=Field(gt=0,le=500000)
+    amount: float=Field(gt=0,le=500000,allow_inf_nan=False)
     category: Literal['Travel','Connectivity','Meals','Equipment','Other']='Other'
+    expense_date: date|None=None
+    merchant: str=Field(default='',max_length=150)
+    business_purpose: str=Field(default='',max_length=1000)
+    cost_center: str=Field(default='',max_length=80)
+    receipt_reference: str=Field(default='',max_length=240)
 class ExpenseState(BaseModel):
     status: Literal['Approved','Rejected']
     reason: str=Field(min_length=5,max_length=500)
@@ -281,8 +286,12 @@ def update_job(job_id:int,body:JobStatus,user=Depends(require_hr)):
 
 @app.patch('/api/candidates/{candidate_id}/stage')
 def candidate_stage(candidate_id:int,body:CandidateStage,user=Depends(require_manager)):
+    needs(user['role']=='admin' or body.stage not in ('Offer','Hired'),
+          'Only HR administrators can place candidates into Offer or Hired stages.',403)
     with db() as c:
-        record(c,'candidates',candidate_id)
+        existing=record(c,'candidates',candidate_id)
+        needs(user['role']=='admin' or existing['stage'] not in ('Offer','Hired'),
+              'Only HR administrators can alter an offer or hired candidate.',403)
         c.execute('UPDATE candidates SET stage=? WHERE id=?',(body.stage,candidate_id))
         audit(c,user['id'],'candidate.stage',f'candidate:{candidate_id}',body.stage)
         return {'stage':body.stage}
@@ -468,14 +477,18 @@ def offboarding_state(item_id:int,body:OffboardState,user=Depends(require_hr)):
 @app.get('/api/expenses')
 def get_expenses(user=Depends(current_user)):
     clause,args=('',[]) if user['role']=='admin' else (' WHERE x.employee_id=?',[user['id']])
-    with db() as c: return fetch(c,'SELECT x.*,e.name AS employee_name FROM expenses x JOIN employees e ON e.id=x.employee_id'+clause+' ORDER BY x.id DESC',args)
+    with db() as c: return fetch(c,'''SELECT x.*,e.name AS employee_name,
+        d.expense_date,d.merchant,d.business_purpose,d.cost_center,d.receipt_reference,
+        COALESCE(r.status,'Not recorded') AS reimbursement_status
+        FROM expenses x JOIN employees e ON e.id=x.employee_id
+        LEFT JOIN expense_claim_details d ON d.expense_id=x.id
+        LEFT JOIN expense_reimbursement_records r ON r.expense_id=x.id'''+clause+' ORDER BY x.id DESC',args)
 
 @app.post('/api/expenses',status_code=201)
 def create_expense(body:ExpenseIn,user=Depends(current_user)):
+    from expense_management import create_expense_record
     with db() as c:
-        r=c.execute('INSERT INTO expenses(employee_id,title,amount,category,created_at) VALUES(?,?,?,?,?)',(user['id'],body.title,body.amount,body.category,now()))
-        audit(c,user['id'],'expense.submitted',f'expense:{r.lastrowid}')
-        return {'id':r.lastrowid}
+        return create_expense_record(c,user,body)
 
 @app.patch('/api/expenses/{item_id}')
 def expense_decide(item_id:int,body:ExpenseState,user=Depends(require_hr)):

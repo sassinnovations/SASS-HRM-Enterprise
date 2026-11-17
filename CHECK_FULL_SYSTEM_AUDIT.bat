@@ -2,7 +2,7 @@
 setlocal
 cd /d "%~dp0"
 echo ================================================================
-echo SASS HRM v4.4.1 - full source and offline regression audit
+echo SASS HRM candidate search release - full source and offline regression audit
 echo ================================================================
 echo No existing MySQL database is modified by these checks.
 python server\schema_audit.py --file-only || goto FAILED
@@ -12,6 +12,8 @@ python scripts\verify-login-design.py || goto FAILED
 python scripts\check-cross-module-reliability.py || goto FAILED
 python scripts\verify-design-parity.py || goto FAILED
 python scripts\verify-v24-package.py --workspace || goto FAILED
+python server\full_mysql_schema_test.py || goto FAILED
+python scripts\check-empty-candidate-bundle.py || goto FAILED
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\test-backend.ps1" || goto FAILED
 echo.
 echo PASS: Source and isolated tests completed.

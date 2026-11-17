@@ -7,21 +7,13 @@ export const HRM_CONNECTION_LOST = 'sass-hrm:connection-lost';
 export const HRM_CONNECTION_RESTORED = 'sass-hrm:connection-restored';
 export const DEFAULT_API_TIMEOUT_MS = 25000;
 
-/** Local dev leaves VITE_API_URL empty so Vite proxies /api. Production sets it to the Railway API origin. */
-export function apiUrl(path: string): string {
-  const root = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
-  const normalized = path.startsWith('/') ? path : `/${path}`;
-  if (normalized === '/api' || normalized.startsWith('/api/')) return `${root}${normalized}`;
-  return `${root}/api${normalized}`;
-}
-
 let sessionEventToken: string | null = null;
 let connectionUnavailable = false;
 
-export async function hrmFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+export async function hrmFetch(input: RequestInfo | URL, init: RequestInit = {}, timeoutMs: number = DEFAULT_API_TIMEOUT_MS): Promise<Response> {
   const controller = new AbortController();
   let timedOut = false;
-  const timeout = window.setTimeout(() => { timedOut = true; controller.abort(); }, DEFAULT_API_TIMEOUT_MS);
+  const timeout = window.setTimeout(() => { timedOut = true; controller.abort(); }, timeoutMs);
   const callerSignal = init.signal;
   const cancel = () => controller.abort();
   if (callerSignal?.aborted) controller.abort();
@@ -52,7 +44,7 @@ export async function hrmFetch(input: RequestInfo | URL, init: RequestInit = {})
       window.dispatchEvent(new Event(HRM_CONNECTION_LOST));
     }
     if (timedOut) throw new Error('The server took too long to respond. Check the API connection and use Refresh data.');
-    throw new Error('Cannot connect to the SASS HRM API. Check the API connection, then use Refresh data.');
+    throw new Error('Cannot connect to the SASS HRM API. Check the configured API URL and backend health, then use Refresh data.');
   } finally {
     window.clearTimeout(timeout);
     callerSignal?.removeEventListener('abort', cancel);

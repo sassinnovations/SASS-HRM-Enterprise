@@ -28,7 +28,7 @@ assert {file for file,_,_ in controls}=={'App.tsx','main.tsx'}, f'Unexpected ref
 assert 'Refresh data</span></button>' in controls[0][2] or any('Refresh data</span></button>' in text for _,_,text in controls)
 assert any('Reload app</button>' in value for _,_,value in controls),'Error boundary must retain its crash recovery action'
 required={
- 'WorkspaceControl.tsx', 'WorkforcePlanning.tsx', 'WorkflowReminders.tsx',
+ 'CandidateLibrary.tsx', 'WorkspaceControl.tsx', 'WorkforcePlanning.tsx', 'WorkflowReminders.tsx',
  'TalentTools.tsx', 'CompensationTools.tsx', 'CompensationSettings.tsx',
  'AdminSettingsCenter.tsx', 'AdminSetup.tsx', 'OrganizationSettings.tsx',
  'OperationsExtra.tsx', 'EmployeeServicesV20.tsx', 'ProfileCenter.tsx',

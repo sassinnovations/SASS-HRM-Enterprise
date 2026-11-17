@@ -2,7 +2,7 @@
 No external side effects. Decimal monetary arithmetic and explicit year/jurisdiction.
 See docs/PAYROLL_TAX_SCOPE.md and URLs returned in response.
 """
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 from typing import Literal
 
 D=lambda n: Decimal(str(n))
@@ -23,58 +23,124 @@ INDIA_NEW=[(400000,0),(800000,'.05'),(1200000,'.10'),(1600000,'.15'),(2000000,'.
 INDIA_OLD=[(250000,0),(500000,'.05'),(1000000,'.20'),(None,'.30')]
 UK_ENG=[(37700,'.20'),(125140,'.40'),(None,'.45')]
 US_SINGLE=[(12400,'.10'),(50400,'.12'),(105700,'.22'),(201775,'.24'),(256225,'.32'),(640600,'.35'),(None,'.37')]
+US_JOINT=[(24800,'.10'),(100800,'.12'),(211400,'.22'),(403550,'.24'),(512450,'.32'),(768700,'.35'),(None,'.37')]
+US_HEAD=[(17700,'.10'),(67450,'.12'),(105700,'.22'),(201750,'.24'),(256200,'.32'),(640600,'.35'),(None,'.37')]
+US_SEPARATE=[(12400,'.10'),(50400,'.12'),(105700,'.22'),(201775,'.24'),(256225,'.32'),(384350,'.35'),(None,'.37')]
+US_FILING={'single':(US_SINGLE,16100,'Single'), 'married_joint':(US_JOINT,32200,'Married filing jointly'),
+           'head_household':(US_HEAD,24150,'Head of household'),
+           'married_separate':(US_SEPARATE,16100,'Married filing separately')}
+AU_RESIDENT=[(18200,0),(45000,'.15'),(135000,'.30'),(190000,'.37'),(None,'.45')]
+UK_SCOTLAND=[(3967,'.19'),(16956,'.20'),(31092,'.21'),(62430,'.42'),(125140,'.45'),(None,'.48')]
+
 SOURCES={
  'IN':'https://www.incometax.gov.in/iec/foportal/help/all-topics/e-filing-services/income-and-tax-estimator-um',
  'GB':'https://www.gov.uk/guidance/rates-and-thresholds-for-employers-2026-to-2027',
- 'US':'https://www.irs.gov/newsroom/irs-releases-tax-inflation-adjustments-for-tax-year-2026-including-amendments-from-the-one-big-beautiful-bill',
+ 'US':'https://www.irs.gov/irb/2025-45_IRB',
+ 'AU':'https://www.ato.gov.au/tax-rates-and-codes/tax-rates-australian-residents',
+ 'AE':'https://u.ae/en/information-and-services/finance-and-investment/taxation',
  'PF':'https://www.epfindia.gov.in/site_en/For_Employers.php/Disablitity.php',
  'ESI':'https://www.esic.gov.in/attachments/circularfile/7a6e3189a5201812e4c067e5286a1c1e.pdf'
 }
 
-def estimate_tax(country:Literal['IN','GB','US'], annual_gross:float, regime:str='new', deductions:float=0, resident:bool=True):
-    gross=D(annual_gross); deductions=D(deductions)
-    if gross<0 or deductions<0: raise ValueError('Gross pay and deductions cannot be negative')
+def progressive_details(taxable, bands):
+    """Each taxable bracket is recorded so the displayed summary can be audited."""
+    value=max(D(0),D(taxable)); previous=D(0); out=[]
+    for cap, rate in bands:
+        top=D(cap) if cap is not None else value
+        amount=max(D(0),min(value,top)-previous)
+        if amount>0:
+            out.append({'from':money(previous),'to':money(min(value,top)),
+                        'rate_percent':money(D(rate)*100),'taxable_in_band':money(amount),
+                        'tax_in_band':money(amount*D(rate))})
+        if cap is None or value<=top: break
+        previous=top
+    return out
+
+
+def estimate_tax(country:Literal['IN','GB','US','AU','AE'], annual_gross:float,
+                 regime:str='new', deductions:float=0, resident:bool=True):
+    gross=D(annual_gross); claimed=D(deductions)
+    if not gross.is_finite() or not claimed.is_finite() or gross<0 or claimed<0 or claimed>gross:
+        raise ValueError('Annual salary and deductions must be finite and nonnegative; deductions cannot exceed salary.')
+    if gross>D(100000000): raise ValueError('Annual salary exceeds the supported reference range')
+    rebate=D(0); cess=D(0); allowance=D(0); allowed=claimed; limitations=[]; breakdown=[]
     if country=='IN':
-        if gross>5000000: raise ValueError('Indian salary over INR 50 lakh requires a surcharge-aware specialist engine; this calculator does not support it.')
+        if regime=='new' and claimed>0:
+            raise ValueError('India new regime: separate optional deductions are not implemented; enter zero.')
+        if gross>5000000:
+            raise ValueError('Indian salary above INR 50 lakh requires a surcharge-aware specialist calculation.')
         if regime not in ('new','old'): raise ValueError('India regime must be new or old')
-        std=D(75000 if regime=='new' else 50000)
-        allowed=D(0) if regime=='new' else deductions
-        taxable=max(D(0),gross-std-allowed)
-        raw=progressive(taxable,INDIA_NEW if regime=='new' else INDIA_OLD)
-        rebate=D(0)
-        if resident and regime=='new' and taxable<=1200000: rebate=min(raw,D(60000))
+        allowance=D(75000 if regime=='new' else 50000)
+        allowed=D(0) if regime=='new' else claimed
+        taxable=max(D(0),gross-allowance-allowed)
+        bands=INDIA_NEW if regime=='new' else INDIA_OLD
+        breakdown=progressive_details(taxable,bands)
+        raw=progressive(taxable,bands)
+        if resident and regime=='new' and taxable<=1200000:
+            rebate=min(raw,D(60000))
         elif resident and regime=='new' and taxable>1200000:
-            # Approximate 87A marginal relief for eligible ordinary income above 12 lakh.
             rebate=max(D(0),raw-(taxable-D(1200000)))
-        elif resident and regime=='old' and taxable<=500000: rebate=min(raw,D(12500))
-        income_tax=max(D(0),raw-rebate)
-        cess=income_tax*D('.04')
-        final=income_tax+cess
-        return {'country':'IN','currency':'INR','tax_year':'2026-27','regime':regime,'taxable_income':money(taxable),
-                'standard_deduction':money(std),'other_deductions_used':money(allowed),'rebate':money(rebate),
-                'base_tax':money(income_tax),'cess':money(cess),'estimated_annual_tax':money(final),
-                'estimated_monthly_tax':money(final/D(12)),'sources':[SOURCES['IN']],
-                'limitations':['Employment salary only; tax on special-rate income, residency nuances, exemptions, and actual TDS are excluded.',
-                               'Age-specific old-regime slabs, surcharge, marginal-relief edge cases and detailed declarations require professional review.']}
-    if country=='GB':
-        if regime!='standard': raise ValueError('GB supports standard illustrative rates only')
-        allowance=max(D(0),D(12570)-max(D(0),gross-D(100000))/D(2))
-        taxable=max(D(0),gross-allowance-deductions)
-        # higher tax band boundary is on taxable income (threshold at £125140 gross when allowance tapers)
-        result=progressive(taxable,UK_ENG)
-        return {'country':'GB','currency':'GBP','tax_year':'2026-27','regime':'England/Wales/Northern Ireland illustrative','taxable_income':money(taxable),
-                'standard_deduction':money(allowance),'other_deductions_used':money(deductions),'rebate':0,
-                'base_tax':money(result),'cess':0,'estimated_annual_tax':money(result),'estimated_monthly_tax':money(result/D(12)),
-                'sources':[SOURCES['GB']],'limitations':['Not a PAYE withholding calculation; excludes National Insurance, benefits and tax codes.', 'Scotland is not supported; Welsh rates assumed same as the published main rates.']}
-    if country=='US':
-        if regime!='single': raise ValueError('US reference estimator supports only single federal filers')
-        taxable=max(D(0),gross-D(16100)-deductions)
-        result=progressive(taxable,US_SINGLE)
-        return {'country':'US','currency':'USD','tax_year':'2026','regime':'single/federal','taxable_income':money(taxable),
-                'standard_deduction':16100,'other_deductions_used':money(deductions),'rebate':0,'base_tax':money(result),'cess':0,
-                'estimated_annual_tax':money(result),'estimated_monthly_tax':money(result/D(12)),
-                'sources':[SOURCES['US']],'limitations':['Not Form W-4 withholding or statutory net pay.', 'Excludes FICA, state/local tax, credits, additional deductions, AMT and filing statuses other than single.']}
-    raise ValueError('Unsupported jurisdiction; configure a reviewed country adapter before processing payroll')
+        elif resident and regime=='old' and taxable<=500000:
+            rebate=min(raw,D(12500))
+        base=max(D(0),raw-rebate)
+        cess=base*D('.04')
+        final=base+cess
+        currency='INR'; tax_year='2026-27'
+        limitations=['Ordinary salary only. Special-rate income, detailed exemptions, tax residency and actual TDS excluded.',
+                     'Old regime uses below-60 slabs; surcharge and certain marginal-relief cases require specialist review.']
+    elif country=='GB':
+        if regime not in ('standard','scotland'): raise ValueError('UK region must be standard or scotland')
+        # Approximate adjusted net income after assumed eligible deductions for allowance taper.
+        adjusted_net=max(D(0),gross-claimed)
+        allowance=max(D(0),D(12570)-max(D(0),adjusted_net-D(100000))/D(2))
+        taxable=max(D(0),adjusted_net-allowance)
+        bands=UK_SCOTLAND if regime=='scotland' else UK_ENG
+        breakdown=progressive_details(taxable,bands)
+        base=progressive(taxable,bands)
+        final=base; currency='GBP'; tax_year='2026-27'
+        limitations=['Illustrative UK employment income tax only, not PAYE; excludes National Insurance, tax codes and student loans.',
+                     'Deductions assumed fully eligible for illustration; actual adjusted net income and pension treatment can differ.',
+                     'Scotland option estimates Scottish non-savings employment rates; country of residence and reliefs must be verified.']
+    elif country=='US':
+        if claimed>0:
+            raise ValueError('US additional deduction eligibility is not modeled; enter zero. The applicable standard deduction is included.')
+        if regime not in US_FILING: raise ValueError('Unsupported US federal filing status')
+        bands,standard,_=US_FILING[regime]
+        allowance=D(standard)
+        taxable=max(D(0),gross-allowance-claimed)
+        breakdown=progressive_details(taxable,bands)
+        base=progressive(taxable,bands)
+        final=base; currency='USD'; tax_year='2026'
+        limitations=['Federal ordinary salary income tax only; not Form W-4 withholding or an official Form 1040 calculation.',
+                     'Excludes FICA, state/local income tax, credits, itemization rules, AMT and filing-status eligibility checks.',
+                     'Standard deduction applied by filing status; itemization and other special deductions are not modeled.']
+    elif country=='AU':
+        if regime!='resident': raise ValueError('Australia supports only full-year tax residents')
+        taxable=max(D(0),gross-claimed)
+        bands=AU_RESIDENT
+        breakdown=progressive_details(taxable,bands)
+        base=progressive(taxable,bands)
+        final=base; currency='AUD'; tax_year='2026-27'
+        limitations=['Only the Australian resident ordinary income tax rates; excludes the Medicare levy and surcharge.',
+                     'Assumes a full-year resident entitled to the tax-free threshold; excludes offsets, HELP/HECS and tax on special income.']
+    elif country=='AE':
+        if regime!='salary': raise ValueError('UAE supports only personal employment salary')
+        if claimed>0: raise ValueError('UAE salary income tax does not require personal tax deductions; set deductions to zero.')
+        taxable=gross
+        base=D(0); final=D(0); currency='AED';tax_year='2026'
+        limitations=['The UAE has no federal personal income tax on salary. This does not cover corporate tax, VAT, social contributions or foreign tax residency.',
+                     'Employment income in other countries may be taxable elsewhere.']
+    else:
+        raise ValueError('Unsupported country; configure a reviewed country adapter before processing payroll')
+    return {'country':country,'currency':currency,'tax_year':tax_year,'regime':regime,
+            'annual_gross':money(gross),'taxable_income':money(taxable),
+            'standard_deduction':money(allowance),'other_deductions_used':money(allowed),
+            'rebate':money(rebate),'base_tax':money(base),'cess':money(cess),
+            'estimated_annual_tax':money(final),'estimated_monthly_tax':money(final/D(12)),
+            'estimated_annual_net':money(gross-final),'estimated_monthly_net':money((gross-final)/D(12)),
+            'effective_tax_rate_percent':money(final/gross*100) if gross else 0,
+            'bracket_breakdown':breakdown,'sources':[SOURCES[country]], 'limitations':limitations,
+            'estimate_only':True,'ruleset_version':f'{country}-{tax_year}-reference-2026-11-16'}
 
 
 def estimate_india_monthly_pay(basic, hra, allowance, bonus=0, reimbursements=0, pf_enabled=False, esi_enabled=False,

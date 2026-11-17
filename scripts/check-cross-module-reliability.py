@@ -1,4 +1,4 @@
-"""Cross-module reliability guard for the v4.5.0 source bundle."""
+"""Cross-module reliability guard for the v4.8.0 source bundle."""
 from pathlib import Path
 import re
 root=Path(__file__).resolve().parent.parent
