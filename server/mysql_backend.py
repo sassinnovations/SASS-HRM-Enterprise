@@ -161,6 +161,29 @@ def install_schema(connection):
                 cur.execute("SELECT RELEASE_LOCK('sass_hrm_schema_v1')")
 
 
+_SQLITE_CREATE_INDEX = re.compile(
+    r'''^\s*CREATE\s+(UNIQUE\s+)?INDEX\s+IF\s+NOT\s+EXISTS\s+
+        (?P<name>\w+)\s+ON\s+(?P<table>\w+)\s*
+        (?P<columns>\([^)]*\))\s*;?\s*$''',
+    re.I | re.S | re.X,
+)
+
+
+def sqlite_create_index(sql: str):
+    """Translate SQLite CREATE INDEX IF NOT EXISTS. MySQL has no IF NOT EXISTS on indexes."""
+    match = _SQLITE_CREATE_INDEX.match(sql)
+    if not match:
+        return None
+    unique = bool(match.group(1))
+    name, table, columns = match.group('name'), match.group('table'), match.group('columns')
+    kind = 'UNIQUE ' if unique else ''
+    return {
+        'name': name,
+        'table': table,
+        'sql': f'CREATE {kind}INDEX `{name}` ON `{table}` {columns}',
+    }
+
+
 def rewrite_sql(sql: str) -> str:
     """Translate limited SQLite placeholders and upsert forms used by this API."""
     sql=re.sub(r'\bINSERT\s+OR\s+IGNORE\b','INSERT IGNORE',sql,flags=re.I)
@@ -213,6 +236,21 @@ class MySQLCompatConnection:
                             (pragma.group(1),))
                 records=cur.fetchall()
                 return BufferedResult(records,rowcount=len(records))
+        index = sqlite_create_index(sql)
+        if index:
+            # MySQL rejects CREATE INDEX IF NOT EXISTS. Create the index only when it is absent.
+            with self.raw.cursor() as cur:
+                cur.execute('SELECT COUNT(*) AS n FROM information_schema.statistics '
+                            'WHERE table_schema=DATABASE() AND table_name=%s AND index_name=%s',
+                            (index['table'], index['name']))
+                if cur.fetchone()['n'] == 0:
+                    try:
+                        cur.execute(index['sql'])
+                    except Exception as e:
+                        # Another startup created the same index between the check and this statement.
+                        if getattr(e, 'args', (None,))[0] != 1061:
+                            raise
+                return BufferedResult((), cur.lastrowid, cur.rowcount)
         with self.raw.cursor() as cur:
             try:
                 cur.execute(rewrite_sql(sql),tuple(params))
