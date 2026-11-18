@@ -139,8 +139,7 @@ def professional_payload(row: dict) -> dict:
     }
 
 
-def professional_row(conn,employee_id:int):
-    result=conn.execute('''SELECT e.id,e.code,e.name,e.email,e.work_email,e.role,e.designation,e.department,
+_PROFILE_SQL = '''SELECT e.id,e.code,e.name,e.email,e.work_email,e.role,e.designation,e.department,
           e.location,e.work_mode,e.join_date,e.manager_id,
           COALESCE(p.preferred_name,'') AS preferred_name,
           COALESCE(p.headline,'') AS headline,
@@ -153,7 +152,20 @@ def professional_row(conn,employee_id:int):
           COALESCE(p.updated_at,'') AS profile_updated_at,
           EXISTS(SELECT 1 FROM profile_photos ph WHERE ph.employee_id=e.id) AS has_photo
           FROM employees e LEFT JOIN professional_profiles p ON p.employee_id=e.id
-          WHERE e.id=?''',(employee_id,)).fetchone()
+          WHERE e.id=?'''
+_EMPLOYEE_SQL = '''SELECT e.id,e.code,e.name,e.email,e.work_email,e.role,e.designation,e.department,
+          e.location,e.work_mode,e.join_date,e.manager_id,e.avatar_color
+          FROM employees e WHERE e.id=?'''
+
+
+def professional_row(conn,employee_id:int):
+    try:
+        result=conn.execute(_PROFILE_SQL,(employee_id,)).fetchone()
+    except Exception:
+        # Older databases may not have the professional-profile tables yet.
+        if hasattr(conn,'rollback'):
+            conn.rollback()
+        result=conn.execute(_EMPLOYEE_SQL,(employee_id,)).fetchone()
     if result is None:
         raise HTTPException(404,'Employee not found')
     return professional_payload(dict(result))

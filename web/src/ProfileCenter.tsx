@@ -10,6 +10,7 @@ type OfficialDraft={code:string;name:string;work_email:string;designation:string
 function officialFromProfile(p:Profile):OfficialDraft{return {code:p.code,name:p.name,work_email:p.work_email||p.email,designation:p.designation,department:p.department,location:p.location,work_mode:p.work_mode||'Hybrid',join_date:(p.join_date||'').slice(0,10),change_reason:''}}
 type Draft={preferred_name:string;headline:string;biography:string;work_phone:string;timezone:string;language:string;directory_visible:boolean;avatar_color:string};
 const defaultDraft:Draft={preferred_name:'',headline:'',biography:'',work_phone:'',timezone:'Asia/Kolkata',language:'en',directory_visible:true,avatar_color:'#3C6DF0'};
+const API=(import.meta.env.VITE_API_URL||'').replace(/\/$/,'')+'/api';
 const timezones=['Asia/Kolkata','Asia/Dubai','America/New_York','America/Chicago','America/Los_Angeles','Europe/London','Europe/Berlin','Australia/Sydney','UTC'];
 const colors=['#3C6DF0','#5F5CEB','#0F766E','#B45309','#C0267B','#6B7280'];
 function asRows(value:unknown):Row[]{return Array.isArray(value)?value.filter((row):row is Row=>!!row&&typeof row==='object'):[]}
@@ -34,14 +35,14 @@ function initials(s:string){return s.trim().split(/\s+/).slice(0,2).map(w=>w[0]|
 function dateLabel(date?:string){return date?new Date(date).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}):'Not configured'}
 async function api<T>(path:string,method='GET',payload?:unknown):Promise<T>{
  const token=sessionStorage.getItem('sass_token');
- const response=await hrmFetch('/api'+path,{method,headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},...(payload===undefined?{}:{body:JSON.stringify(payload)})});
+ const response=await hrmFetch(API+path,{method,headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},...(payload===undefined?{}:{body:JSON.stringify(payload)})});
  const raw=await response.json().catch(()=>null);
  if(!response.ok)throw new Error(typeof raw?.detail==='string'?raw.detail:`Request failed (HTTP ${response.status})`);
  return raw as T;
 }
 async function avatarRequest(path:string,method='GET',body?:Blob):Promise<Response>{
  const token=sessionStorage.getItem('sass_token');
- return hrmFetch('/api'+path,{method,headers:{...(token?{Authorization:`Bearer ${token}`}:{}),...(body?{'Content-Type':body.type}:{})},...(body?{body}:{})});
+ return hrmFetch(API+path,{method,headers:{...(token?{Authorization:`Bearer ${token}`}:{}),...(body?{'Content-Type':body.type}:{})},...(body?{body}:{})});
 }
 function ProfileAvatar({id,hasPhoto,color,name,small=false,revision=0}:{id:number;hasPhoto?:boolean;color:string;name:string;small?:boolean;revision?:number}){
  const [url,setUrl]=useState('');
@@ -75,15 +76,16 @@ export function MyProfile({navigate,onSaved}:{navigate:(page:string)=>void;onSav
  const load=useCallback(async()=>{
   setError('');setLoading(true);
   try{
+   let profileError='';
    const [meResult,people,changes]=await Promise.all([
-    api<unknown>('/profile/me').catch(()=>null),
+    api<unknown>('/profile/me').catch(e=>{profileError=(e as Error).message;return null}),
     api<unknown>('/profile/directory').catch(()=>[]),
     api<unknown>('/profile/me/requests').catch(()=>[]),
    ]);
-   const profile=asProfile(meResult)||asProfile(await api<unknown>('/auth/me').catch(()=>null));
-   if(!profile)throw new Error('Your profile could not be loaded. Use Refresh data to try again.');
+   const profile=asProfile(meResult)||asProfile(await api<unknown>('/auth/me'));
+   if(!profile)throw new Error(profileError||'Your profile could not be loaded. Use Refresh data to try again.');
    setProfile(profile);setDraft(draftFrom(profile));setDirectory(asRows(people));setRequests(asRows(changes));
-   if(!asProfile(meResult))setError('Professional profile details are unavailable. Official account details are shown instead.');
+   if(!asProfile(meResult))setError(profileError||'Professional profile details are unavailable. Official account details are shown instead.');
   }catch(e){setError((e as Error).message)}finally{setLoading(false)}
  },[]);
  useEffect(()=>{void load()},[load]);
