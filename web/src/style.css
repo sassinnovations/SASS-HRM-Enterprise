@@ -443,3 +443,6 @@ body { background: var(--sass-page); color: var(--sass-text); }
 .main-area{height:100vh;min-height:0;overflow:hidden}
 .topbar{position:relative;top:auto}
 .content{min-height:0;overflow:auto}
+.guidance-rail{width:248px;flex:0 0 248px;height:100vh;border-left:1px solid #e9edf5;background:#fff;padding:22px 16px;display:flex;flex-direction:column}
+.guidance-rail .sidebar-ai{margin-bottom:0}
+@media(max-width:1180px){.guidance-rail{display:none}}
