@@ -14,7 +14,7 @@ with tempfile.TemporaryDirectory(prefix='sass-mysql-compat-') as temp:
     os.environ['DATABASE_PATH']=str(Path(temp)/'isolated.db')
     from fastapi.testclient import TestClient
     import main
-    from mysql_backend import split_ddl, rewrite_sql
+    from mysql_backend import split_ddl, rewrite_sql, sqlite_create_index
 
     mysql_schema=Path(__file__).with_name('mysql_schema.sql').read_text(encoding='utf8')
     commands=split_ddl(mysql_schema)
@@ -23,6 +23,10 @@ with tempfile.TemporaryDirectory(prefix='sass-mysql-compat-') as temp:
     assert rewrite_sql('SELECT * FROM employees WHERE id=?')=='SELECT * FROM employees WHERE id=%s'
     upsert=rewrite_sql('INSERT INTO login_attempts(email_fingerprint,failures) VALUES(?,?) ON CONFLICT(email_fingerprint) DO UPDATE SET failures=excluded.failures')
     assert 'ON DUPLICATE KEY UPDATE failures=VALUES(failures)' in upsert
+    work_email_index=sqlite_create_index('CREATE UNIQUE INDEX IF NOT EXISTS ux_employees_work_email ON employees(work_email)')
+    assert work_email_index['sql']=='CREATE UNIQUE INDEX `ux_employees_work_email` ON `employees` (work_email)'
+    assert sqlite_create_index('CREATE INDEX IF NOT EXISTS idx_goal_history_goal ON goal_progress_history(goal_id)')['sql']=='CREATE INDEX `idx_goal_history_goal` ON `goal_progress_history` (goal_id)'
+    assert sqlite_create_index("UPDATE employees SET work_email=lower(email)") is None
     assert 'a.proposed_in ||' not in Path(__file__).with_name('advanced.py').read_text(encoding='utf8').split("@app.get('/api/approvals/inbox')",1)[1].split("@app.get('/api/calendar/me')",1)[0], 'MySQL-incompatible concatenation in approvals'
 
     with TestClient(main.app) as client:

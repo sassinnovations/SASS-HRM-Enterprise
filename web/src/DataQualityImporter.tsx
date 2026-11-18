@@ -4,6 +4,8 @@ import {hrmFetch} from './apiTransport';
 import {useRefreshData} from './useRefreshData';
 
 const API=(import.meta.env.VITE_API_URL||'').replace(/\/$/,'')+'/api/admin/data-quality/import';
+const ROOT_API=(import.meta.env.VITE_API_URL||'').replace(/\/$/,'')+'/api';
+const FRONTEND_RELEASE='4.8.0';
 const FIELDS=['code','name','email','designation','department','location','join_date','role','work_mode'] as const;
 type FieldName=typeof FIELDS[number];
 type ImportSettings={mapping:Record<FieldName,string>;duplicate_mode:'reject'|'skip';date_format:'YYYY-MM-DD'|'DD/MM/YYYY'|'MM/DD/YYYY';sheet_name:string;default_role:'employee'|'manager';default_work_mode:'On-site'|'Hybrid'|'Remote';trim_values:boolean;skip_blank_rows:boolean;max_rows:number};
@@ -42,32 +44,46 @@ export function DataQualityImporter({onImported}:{onImported?:()=>Promise<void>}
  const [busy,setBusy]=useState(false);
  const [error,setError]=useState('');
  const [message,setMessage]=useState('');
+ const [safeConnection,setSafeConnection]=useState(false);
+ const [connectionChecked,setConnectionChecked]=useState(false);
+ const replacePreview=(p:Preview|null)=>{setPreview(p);if(!p)setConfirm('')};
+ const validation=preview?{can_import:!preview.error_count&&Boolean(preview.preview_token)&&preview.valid>0&&confirm==='IMPORT'}:null;
  const refresh=useCallback(async()=>{
-  try{const [saved,imports]=await Promise.all([get<ImportSettings>('/settings'),get<History[]>('/history')]);setSettings(saved);setHistory(imports)}catch(e){setError((e as Error).message)}
+  try{
+   const [saved,imports]=await Promise.all([get<ImportSettings>('/settings'),get<History[]>('/history')]);
+   setSettings(saved);setHistory(imports);
+   const overviewRes=await hrmFetch(ROOT_API+'/admin/setup/overview',{headers:{Authorization:`Bearer ${token()}`},cache:'no-store'});
+   const overview=await overviewRes.json().catch(()=>null);
+   setSafeConnection(overviewRes.ok&&overview?.database_engine==='mysql'&&overview?.backend_version===FRONTEND_RELEASE);
+  }catch(e){setError((e as Error).message);setSafeConnection(false)}
+  finally{setConnectionChecked(true)}
  },[]);
  useEffect(()=>{void refresh()},[refresh]);useRefreshData(refresh);
  const run=async(job:()=>Promise<void>)=>{setError('');setMessage('');setBusy(true);try{await job()}catch(e){setError((e as Error).message)}finally{setBusy(false)}};
- const edit=(patch:Partial<ImportSettings>)=>{setSettings(s=>({...s,...patch}));setPreview(null);setConfirm('')};
+ const edit=(patch:Partial<ImportSettings>)=>{setSettings(s=>({...s,...patch}));replacePreview(null);setConfirm('')};
  const inspect=()=>void run(async()=>{
   if(!file)throw Error('Choose a CSV or XLSX file first.');
+  if(!safeConnection)throw Error('MySQL backend and release v4.8.0 must be verified before importing. Run DIAGNOSE_CONNECTION.bat.');
   const result=await sendFile<{columns:string[];file_rows:number}>('/columns',file);
-  setColumns(result.columns);setSettings(current=>{const next={...current.mapping};for(const field of FIELDS){if(result.columns.some(h=>h.toLowerCase()===next[field].toLowerCase()))continue;const match=result.columns.find(h=>[field,...(ALIASES[field]||[])].some(alias=>alias.toLowerCase()===h.toLowerCase()));if(match)next[field]=match}return {...current,mapping:next}});setPreview(null);setConfirm('');setMessage(`${result.columns.length} columns found; ${result.file_rows} worksheet rows. Check your column mapping and preview.`);
+  setColumns(result.columns);setSettings(current=>{const next={...current.mapping};for(const field of FIELDS){if(result.columns.some(h=>h.toLowerCase()===next[field].toLowerCase()))continue;const match=result.columns.find(h=>[field,...(ALIASES[field]||[])].some(alias=>alias.toLowerCase()===h.toLowerCase()));if(match)next[field]=match}return {...current,mapping:next}});replacePreview(null);setConfirm('');setMessage(`${result.columns.length} columns found; ${result.file_rows} worksheet rows. Check your column mapping and preview.`);
  });
  const save=()=>void run(async()=>{
-  await sendJson('/settings',settings);setPreview(null);setConfirm('');setMessage('Import settings saved and audited. Preview your file with these settings.');
+  if(!safeConnection)throw Error('MySQL backend and release v4.8.0 must be verified before importing. Run DIAGNOSE_CONNECTION.bat.');
+  await sendJson('/settings',settings);replacePreview(null);setConfirm('');setMessage('Import settings saved and audited. Preview your file with these settings.');
  });
  const preflight=()=>void run(async()=>{
   if(!file)throw Error('Choose a CSV or XLSX file first.');
+  if(!safeConnection)throw Error('MySQL backend and release v4.8.0 must be verified before importing. Run DIAGNOSE_CONNECTION.bat.');
   // Save first so the backend preview and confirmation use exactly these choices.
   await sendJson('/settings',settings);
   const p=await sendFile<Preview>('/preview',file);
-  setPreview(p);setConfirm('');setMessage(p.error_count?`${p.error_count} validation issues. Nothing was imported.`:`Preview ready: ${p.valid} new records, ${p.skipped} duplicates skipped.`);
+  replacePreview(p);setConfirm('');setMessage(p.error_count?`${p.error_count} validation issues. Nothing was imported.`:`Preview ready: ${p.valid} new records, ${p.skipped} duplicates skipped.`);
  });
  const commit=()=>void run(async()=>{
-  if(!file||!preview?.preview_token||preview.error_count||confirm!=='IMPORT')throw Error('Preview successfully and type IMPORT before continuing.');
+  if(!safeConnection||!validation?.can_import||!file||!preview?.preview_token||preview.error_count||confirm!=='IMPORT')throw Error('Preview successfully and type IMPORT before continuing.');
   const result=await sendFile<{created:number;skipped:number;message:string}>('/commit',file,{'x-import-preview-token':preview.preview_token,'x-import-confirm':'IMPORT'});
   setMessage(`${result.created} inactive employee accounts created; ${result.skipped} duplicates skipped. Invite employees separately in Account Provisioning.`);
-  setPreview(null);setConfirm('');setFile(null);setColumns([]);
+  replacePreview(null);setConfirm('');setFile(null);setColumns([]);
   setHistory(await get<History[]>('/history'));
   if(onImported)await onImported();
  });
@@ -79,6 +95,7 @@ export function DataQualityImporter({onImported}:{onImported?:()=>Promise<void>}
  });
  return <section className="dq-panel dq-import" aria-label="Employee HRIS import settings">
   <div className="dq-import-heading"><div><h2>Employee HRIS import & settings</h2><p>Import employee master data from CSV or Excel. All uploads are previewed first; existing employees are never overwritten and new accounts remain inactive.</p></div><button type="button" aria-expanded={expanded} onClick={()=>setExpanded(s=>!s)}><UploadCloud size={16}/>{expanded?'Close importer':'Open importer'}</button></div>
+  {connectionChecked&&!safeConnection&&<div role="alert" className="dq-alert error">MySQL backend not verified — import is paused. Expected MySQL and API {FRONTEND_RELEASE}. Run DIAGNOSE_CONNECTION.bat before uploading employee records.</div>}
   {expanded&&<div className="dq-import-content">
    <div className="dq-import-toolbar"><button type="button" disabled={busy} onClick={downloadTemplate}><Download size={16}/> Download saved CSV template</button><span>Administrator only · Max file size 10 MB · CSV/XLSX</span></div>
    <div className="dq-import-settings"><h3><Settings2 size={17}/> Import validation & defaults</h3><div className="dq-policy-grid">
@@ -91,12 +108,12 @@ export function DataQualityImporter({onImported}:{onImported?:()=>Promise<void>}
    </div><div className="dq-import-toggles"><label><input type="checkbox" checked={settings.trim_values} onChange={e=>edit({trim_values:e.target.checked})}/> Trim whitespace</label><label><input type="checkbox" checked={settings.skip_blank_rows} onChange={e=>edit({skip_blank_rows:e.target.checked})}/> Ignore blank rows</label></div>
    <h3>Excel / CSV column mapping</h3><p>Choose the worksheet column corresponding to each employee field. Fields marked * are required; role and work mode can use the defaults above.</p>
    <div className="dq-policy-grid">{FIELDS.map(key=><label key={key}>{NAMES[key]}{!['role','work_mode'].includes(key)?' *':''}{columns.length?<select value={settings.mapping[key]} onChange={e=>edit({mapping:{...settings.mapping,[key]:e.target.value}})}><option value="">{!['role','work_mode'].includes(key)?'Select required column':'Use default'}</option>{columns.map(name=><option key={name} value={name}>{name}</option>)}{!columns.includes(settings.mapping[key])&&<option value={settings.mapping[key]}>{settings.mapping[key]} (not found)</option>}</select>:<input value={settings.mapping[key]} maxLength={100} onChange={e=>edit({mapping:{...settings.mapping,[key]:e.target.value}})} placeholder={key}/>}</label>)}</div>
-   <button type="button" disabled={busy||!Number.isInteger(settings.max_rows)||settings.max_rows<1||settings.max_rows>5000} onClick={save}>Save import settings</button>
+   <button type="button" disabled={busy||!safeConnection||!Number.isInteger(settings.max_rows)||settings.max_rows<1||settings.max_rows>5000} onClick={save}>Save import settings</button>
    </div>
-   <div className="dq-import-upload"><h3><FileSpreadsheet size={17}/> Upload & preview</h3><label>Select employee workbook <input type="file" accept=".csv,.xlsx" onChange={e=>{setFile(e.target.files?.[0]||null);setPreview(null);setColumns([]);setConfirm('')}}/></label><div className="dq-actions"><button disabled={!file||busy} onClick={inspect}>Inspect columns</button><button className="dq-primary" disabled={!file||busy} onClick={preflight}>Preview & validate</button></div>
+   <div className="dq-import-upload"><h3><FileSpreadsheet size={17}/> Upload & preview</h3><label>Select employee workbook <input type="file" accept=".csv,.xlsx" onChange={e=>{setFile(e.target.files?.[0]||null);replacePreview(null);setColumns([]);setConfirm('')}}/></label><div className="dq-actions"><button disabled={!file||busy||!safeConnection} onClick={inspect}>Inspect columns</button><button className="dq-primary" disabled={!file||busy||!safeConnection} onClick={preflight}>Preview & validate</button></div>
    {preview&&<div className="dq-import-preview"><h3>Import preview</h3><div className="dq-import-summary"><span>Total: <strong>{preview.total}</strong></span><span>Ready: <strong>{preview.valid}</strong></span><span>Skipped: <strong>{preview.skipped}</strong></span><span>Errors: <strong>{preview.error_count}</strong></span></div>{preview.error_count>0&&<div role="alert" className="dq-alert error">No rows can be imported until errors are corrected. {preview.errors.slice(0,20).map(e=><p key={e.row}>Row {e.row}: {e.issues.join('; ')}</p>)}</div>}
    {preview.sample.length>0&&<div className="dq-import-table"><table><thead><tr><th>Excel row</th><th>Code</th><th>Employee</th><th>Department</th></tr></thead><tbody>{preview.sample.map(r=><tr key={r.row}><td>{r.row}</td><td>{r.code}</td><td>{r.name}</td><td>{r.department}</td></tr>)}</tbody></table></div>}
-   {!preview.error_count&&preview.preview_token&&<div className="dq-import-confirm"><p><ShieldCheck size={16}/> This creates inactive HRIS accounts. Existing employees are not updated. Confirm after reviewing the data.</p><label>Type IMPORT to confirm<input value={confirm} onChange={e=>setConfirm(e.target.value)} placeholder="IMPORT" autoComplete="off"/></label><button className="dq-primary" disabled={busy||confirm!=='IMPORT'} onClick={commit}>Import {preview.valid} employee records</button></div>}
+   {!preview.error_count&&preview.preview_token&&<div className="dq-import-confirm"><p><ShieldCheck size={16}/> This creates inactive HRIS accounts. Existing employees are not updated. Confirm after reviewing the data.</p><label>Type IMPORT to confirm<input value={confirm} onChange={e=>setConfirm(e.target.value)} placeholder="IMPORT" autoComplete="off"/></label><button className="dq-primary" disabled={busy||!safeConnection||!validation?.can_import} onClick={commit}>Import {preview.valid} employee records</button></div>}
    </div>}</div>
    <div className="dq-import-history"><h3><CheckCircle2 size={17}/> Recent import history</h3>{history.length?<div className="dq-import-table"><table><thead><tr><th>File</th><th>Rows</th><th>Created</th><th>Skipped</th><th>Imported at</th></tr></thead><tbody>{history.map(r=><tr key={r.id}><td>{r.filename}</td><td>{r.source_rows}</td><td>{r.created_rows}</td><td>{r.duplicate_rows}</td><td>{r.created_at.slice(0,19).replace('T',' ')}</td></tr>)}</tbody></table></div>:<p>No import history yet.</p>}</div>
   </div>}
