@@ -103,6 +103,42 @@ class ProfessionalProfileIn(BaseModel):
         return value
 
 
+def _text(value, default=''):
+    if value is None:
+        return default
+    return value if isinstance(value, str) else str(value)
+
+
+def professional_payload(row: dict) -> dict:
+    """Always return a JSON object. Missing professional fields stay blank, never null."""
+    email = _text(row.get('email'))
+    join_date = _text(row.get('join_date'))
+    return {
+        'id': row.get('id'),
+        'code': _text(row.get('code')),
+        'name': _text(row.get('name')),
+        'email': email,
+        'work_email': _text(row.get('work_email')) or email,
+        'role': _text(row.get('role')),
+        'designation': _text(row.get('designation')),
+        'department': _text(row.get('department')),
+        'location': _text(row.get('location')),
+        'work_mode': _text(row.get('work_mode')),
+        'join_date': join_date[:10] if join_date else '',
+        'manager_id': row.get('manager_id'),
+        'preferred_name': _text(row.get('preferred_name')),
+        'headline': _text(row.get('headline')),
+        'biography': _text(row.get('biography')),
+        'work_phone': _text(row.get('work_phone')),
+        'timezone': _text(row.get('timezone'), 'Asia/Kolkata'),
+        'language': _text(row.get('language'), 'en'),
+        'directory_visible': 0 if row.get('directory_visible') in (0, False, '0') else 1,
+        'avatar_color': _text(row.get('avatar_color'), '#3C6DF0') or '#3C6DF0',
+        'profile_updated_at': _text(row.get('profile_updated_at') or row.get('updated_at')),
+        'has_photo': bool(row.get('has_photo')),
+    }
+
+
 def professional_row(conn,employee_id:int):
     result=conn.execute('''SELECT e.id,e.code,e.name,e.email,e.work_email,e.role,e.designation,e.department,
           e.location,e.work_mode,e.join_date,e.manager_id,
@@ -113,14 +149,14 @@ def professional_row(conn,employee_id:int):
           COALESCE(p.timezone,'Asia/Kolkata') AS timezone,
           COALESCE(p.language,'en') AS language,
           COALESCE(p.directory_visible,1) AS directory_visible,
-          COALESCE(p.avatar_color,e.avatar_color) AS avatar_color,
+          COALESCE(p.avatar_color,e.avatar_color,'#3C6DF0') AS avatar_color,
           COALESCE(p.updated_at,'') AS profile_updated_at,
           EXISTS(SELECT 1 FROM profile_photos ph WHERE ph.employee_id=e.id) AS has_photo
           FROM employees e LEFT JOIN professional_profiles p ON p.employee_id=e.id
           WHERE e.id=?''',(employee_id,)).fetchone()
     if result is None:
         raise HTTPException(404,'Employee not found')
-    return dict(result)
+    return professional_payload(dict(result))
 
 
 @app.get('/api/profile/me')
