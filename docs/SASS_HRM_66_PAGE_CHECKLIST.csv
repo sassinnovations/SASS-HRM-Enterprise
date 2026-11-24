@@ -1,0 +1,67 @@
+﻿Group,Feature,Route,Access,Screen source,Navigation / screen source check,Live UI and workflow check
+Workspace,Overview,/workspace/overview,Authenticated user,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Workspace,Action center,/workspace/action-center,Authenticated user,web/src/WorkspaceControl.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Workspace,Global HR search,/workspace/global-search,Authenticated user,web/src/GlobalSearch.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+People Management,HR data quality center,/people/data-quality-center,Administrator,web/src/DataQualityCenter.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Workspace,Workflow reminders,/workspace/workflow-reminders,Authenticated user,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Workspace,Team leave planner,/workspace/team-leave-planner,Authenticated user,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Workspace,My requests & shortcuts,/workspace/my-requests,Authenticated user,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Workspace,Notification inbox,/workspace/notifications,Authenticated user,web/src/WorkspaceControl.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+People Management,Workflow settings,/people/workflow-settings,Administrator,web/src/WorkspaceControl.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+People Management,Employee HRIS,/people/employee-hris,Authenticated user,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+People Management,Organization chart,/people/organization-chart,Authenticated user,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+People Management,Skills & competencies,/people/skills-competencies,Authenticated user,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+People Management,Private contact profile,/people/private-contact-profile,Authenticated user,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Workspace,My profile,/workspace/my-profile,Authenticated user,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+People Management,Profile management,/people/profile-management,Administrator,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Culture,Work arrangement requests,/culture/work-arrangements,Authenticated user,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+People Management,Policy acknowledgements,/people/policy-acknowledgements,Authenticated user,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+People Management,Account provisioning,/people/account-administration,Administrator,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+People Management,Company setup & import,/people/company-setup-import,Administrator,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+People Management,Organization settings,/people/organization-settings,Administrator,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+People Management,Administration settings center,/people/admin-settings-center,Administrator,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+People Management,Talent & service settings,/people/talent-service-settings,Administrator,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Compensation,Time & attendance,/compensation/time-attendance,Authenticated user,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Compensation,Attendance corrections,/compensation/attendance-corrections,Authenticated user,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Compensation,Shifts & schedules,/compensation/shifts-schedules,Authenticated user,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Compensation,Project timesheets,/compensation/project-timesheets,Authenticated user,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Compensation,Leave management,/compensation/leave-management,Authenticated user,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Talent Management,Recruitment ATS,/talent/recruitment-ats,Management,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Talent Management,Onboarding,/talent/onboarding,Authenticated user,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Compensation,Payroll workbench,/compensation/payroll-workbench,Authenticated user,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Compensation,Compensation settings,/compensation/organization-settings,Administrator,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Compensation,Payslip archive,/compensation/payslip-archive,Authenticated user,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Compensation,Tax calculator · Global,/compensation/tax-calculator,Authenticated user,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Culture,Performance & goals,/culture/performance-goals,Authenticated user,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Culture,Performance review cycles,/culture/review-cycles,Authenticated user,web/src/PerformanceSuite.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Culture,Employee appraisals,/culture/employee-appraisals,Authenticated user,web/src/PerformanceSuite.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Culture,1:1 check-ins,/culture/one-on-one-checkins,Authenticated user,web/src/PerformanceSuite.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Culture,Individual development plans,/culture/development-plans,Authenticated user,web/src/PerformanceGrowth.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Culture,Manager feedback requests,/culture/manager-feedback,Authenticated user,web/src/PerformanceGrowth.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Culture,Learning & training,/culture/learning-training,Authenticated user,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Culture,Career development,/culture/career-development,Authenticated user,web/src/CultureSuite.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Culture,Employee Voice,/culture/employee-voice,Authenticated user,web/src/CultureSuite.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Culture,Discipline & conduct,/culture/discipline-conduct,Authenticated user,web/src/CultureSuite.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Talent Management,Request Desk,/talent/request-desk,Authenticated user,web/src/CultureSuite.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Talent Management,HR helpdesk,/talent/hr-helpdesk,Authenticated user,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Compensation,Expenses & claims,/compensation/expenses-claims,Authenticated user,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Employee Services,Asset management,/services/asset-management,Authenticated user,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Employee Services,Employee documents,/services/employee-documents,Authenticated user,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Employee Services,Secure document vault,/services/secure-document-vault,Authenticated user,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Talent Management,Offboarding,/talent/offboarding,Authenticated user,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+People Management,Organization,/people/organization,Authenticated user,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+People Management,Policies & handbook,/people/policies-handbook,Authenticated user,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Compensation,Benefits & programs,/compensation/benefits-programs,Authenticated user,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Culture,Recognition wall,/culture/recognition-wall,Authenticated user,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Culture,Employee pulse,/culture/employee-pulse,Authenticated user,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Talent Management,Interview scheduling,/talent/interview-scheduling,Management,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Talent Management,HR tasks,/talent/hr-tasks,Authenticated user,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Talent Management,HR task templates,/talent/hr-task-templates,Management,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Employee Services,Approval inbox,/services/approval-inbox,Management,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+Workspace,My calendar,/workspace/calendar,Authenticated user,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+People Management,Reports & analytics,/people/reports-analytics,Management,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+People Management,Audit trail,/people/audit-trail,Administrator,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+People Management,HR operations center,/people/hr-operations-center,Administrator,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+People Management,Developer console,/people/developer-console,Authenticated user,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+AI & Preferences,SASS AI Assistant,/ai/assistant,Authenticated user,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts
+AI & Preferences,My settings,/settings/my-workspace,Authenticated user,web/src/App.tsx,Passed,Not tested — requires running Docker/browser and real role accounts

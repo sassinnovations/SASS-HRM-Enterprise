@@ -1,0 +1,21 @@
+.compops{margin:22px 0 28px;padding:20px;background:#fff;border:1px solid #e4e8f7;border-radius:18px;box-shadow:0 10px 32px rgba(30,50,95,.035);color:#192e54}
+.compops-head{display:flex;gap:13px;align-items:center;padding-bottom:16px;border-bottom:1px solid #edf0fa}
+.compops-head p,.compops-panel p,.compops-muted{font-size:13px;color:#677ba2;line-height:1.55;margin:5px 0 12px}
+.compops-head strong{font-size:17px}.compops-head>div:nth-child(2){flex:1}.compops-mark{background:#eef0ff;color:#595cf0;border-radius:13px;padding:11px}
+.compops-outline,.compops-primary{border:1px solid #d9defb;border-radius:10px;padding:10px 13px;background:#f8f8ff;color:#4d51dc;display:inline-flex;gap:7px;justify-content:center;align-items:center;font:inherit;font-size:13px;font-weight:650;cursor:pointer}
+.compops-primary{background:#5a5fe9;color:white;border-color:#5a5fe9}.compops-primary:disabled{opacity:.46;cursor:not-allowed}
+.compops-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px;margin:18px 0}.compops-grid>div{display:grid;grid-template-columns:auto 1fr;gap:3px 8px;background:#f8f9fe;border:1px solid #e9ecfa;border-radius:11px;padding:13px;color:#6469db}.compops-grid span{font-size:12px;color:#677ba2}.compops-grid strong{grid-column:2;font-size:23px;color:#142950}
+.compops-panel{padding:18px;border:1px solid #e8ebf6;border-radius:13px;margin-top:15px;background:#fff}.compops-panel h3{font-size:17px;margin:0 0 6px}
+.compops-row{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.compops-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:16px}.compops-form label,.compops-row label{font-size:12px;color:#526990;font-weight:600;display:grid;gap:7px}
+.compops-form select,.compops-form input,.compops-row input{width:100%;min-width:0;box-sizing:border-box;background:#fff;border:1px solid #d5dff0;border-radius:9px;padding:10px;font:inherit;color:#182f51}.compops-wide{grid-column:1/-1}.compops-actions{grid-column:1/-1;display:flex;gap:10px;flex-wrap:wrap}
+.compops-tablewrap{overflow-x:auto;margin-top:12px}.compops table{width:100%;border-collapse:collapse;font-size:13px;text-align:left}.compops th{background:#f4f5fc;color:#50638d;white-space:nowrap}.compops th,.compops td{padding:12px 10px;border-bottom:1px solid #edf0f7}
+.compops-smallmetrics{display:flex;flex-wrap:wrap;gap:14px;padding:12px;border-radius:9px;background:#f7f8ff;color:#52658a;font-size:13px}.compops-smallmetrics strong{color:#183055}
+.compops-error,.compops-warning,.compops-ok{padding:12px 14px;margin:12px 0;border-radius:9px;display:flex;align-items:center;gap:8px;font-size:13px}.compops-error{background:#fff3f2;color:#a33232;border:1px solid #ffcfca}.compops-warning{background:#fffaee;color:#845400;border:1px solid #ffe7b3;display:block}.compops-ok{background:#edf9f4;color:#166848;border:1px solid #bde9d2}.compops-warning ul{margin:8px 0 0 18px;padding:0}.compops-amount{font-size:15px!important;font-weight:700;color:#26437a!important}
+@media (max-width:880px){.compops-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media (max-width:560px){.compops{padding:13px}.compops-grid{grid-template-columns:1fr 1fr}.compops-head{flex-wrap:wrap}.compops-form{grid-template-columns:1fr}.compops-row label{width:100%}.compops-form label{grid-column:1/-1}}
+/* v3.2 module-specific operations instead of repeated generic overview cards */
+.compops-head-actions{display:flex;flex-wrap:wrap;gap:9px;justify-content:flex-end}
+.compops-head-actions a{text-decoration:none}
+.compops-context{display:grid;grid-template-columns:1fr minmax(160px,240px);gap:16px;margin-top:17px;padding:15px 17px;border-radius:14px;border:1px solid #e9edfa;background:#fafbff}
+.compops-context strong{font-size:13px;color:#263e68}.compops-context ul{padding-left:19px;margin:10px 0 0;font-size:12px;line-height:1.65;color:#647593}.compops-context li{margin:0 0 5px}.compops-context nav{display:flex;flex-direction:column;gap:8px;border-left:1px solid #e4e8f5;padding-left:16px}.compops-context nav a{font-size:12px;text-decoration:none;font-weight:700;color:#5961d8}
+@media(max-width:690px){.compops-context{grid-template-columns:1fr}.compops-context nav{border-left:0;border-top:1px solid #e4e8f5;padding:12px 0 0}}

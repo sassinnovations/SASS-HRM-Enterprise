@@ -1,0 +1,13 @@
+.ce-panel{background:#fff;border:1px solid #e5e9f5;border-radius:18px;padding:24px;margin:22px 0;box-shadow:0 10px 24px rgba(33,49,91,.035);color:#1c2d50}
+.ce-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:22px}
+.ce-heading h3{font-size:20px;margin:7px 0;font-weight:750;letter-spacing:-.03em}.ce-heading p{color:#7f90ab;font-size:14px;margin:0;line-height:1.6}
+.ce-eyebrow{color:#575cf0;font-size:10px;font-weight:800;letter-spacing:1.7px}
+.ce-secondary,.ce-primary{border:1px solid #d9defd;border-radius:10px;padding:10px 13px;display:inline-flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;font-weight:700}
+.ce-primary{background:#5a5fe9;color:white;border-color:#5a5fe9}.ce-secondary{background:#f9faff;color:#555bd5}.ce-primary:disabled,.ce-secondary:disabled{opacity:.55;cursor:not-allowed}
+.ce-grid{display:grid;grid-template-columns:minmax(210px,1fr) minmax(220px,1.4fr);gap:22px}.ce-form{display:flex;flex-direction:column;gap:10px}.ce-form h4,.ce-grid h4{margin:0 0 12px;display:flex;gap:8px;align-items:center}
+.ce-panel select,.ce-panel textarea{display:block;width:100%;border:1px solid #dbe3f3;background:#fff;border-radius:10px;padding:11px;font:inherit;color:#192c4d;max-width:100%;box-sizing:border-box}
+.ce-label{font-size:12px;font-weight:700;color:#586986}.ce-form small,.ce-records>p,.ce-feed>p{color:#8492a7}
+.ce-records{max-height:380px;overflow:auto}.ce-record{background:#fafbff;border:1px solid #edf0fb;border-radius:12px;padding:14px;margin-bottom:11px;overflow-wrap:anywhere}.ce-record b{display:block;font-size:13px}.ce-record span{display:flex;align-items:center;gap:6px;font-size:12px;color:#7f8eaa;margin-top:5px}.ce-record p{font-size:13px;line-height:1.55;margin:8px 0;color:#556b87}.ce-review{margin-top:14px;display:grid;gap:8px}.ce-buttons{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:12px}
+.ce-notice{margin-top:18px;background:#f3f4ff;color:#56659a;padding:12px;border-radius:10px;display:flex;align-items:center;gap:9px;font-size:12px}.ce-alert,.ce-success{padding:12px;border-radius:10px;margin-bottom:14px;font-size:13px}.ce-alert{background:#fff1f1;color:#a32640}.ce-success{background:#ecf8ef;color:#13734a}
+.ce-feed{display:grid;grid-template-columns:repeat(auto-fill,minmax(275px,1fr));gap:12px}.ce-feed .ce-record{margin:0}
+@media(max-width:760px){.ce-panel{padding:16px}.ce-heading{flex-wrap:wrap}.ce-grid{grid-template-columns:1fr}.ce-feed{grid-template-columns:1fr}}

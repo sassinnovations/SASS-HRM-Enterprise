@@ -1,0 +1,74 @@
+﻿feature_key,url,title,domain,settings_page,menu_permission
+dashboard,/workspace/overview,Overview,Workspace & personal tools,workflowsettings,authenticated
+workcenter,/workspace/action-center,Action center,Workspace & personal tools,workflowsettings,authenticated
+globalsearch,/workspace/global-search,Global HR search,Workspace & personal tools,workflowsettings,authenticated
+dataquality,/people/data-quality-center,HR data quality center,People & organization,orgsettings,admin
+reminders,/workspace/workflow-reminders,Workflow reminders,Attendance & workforce scheduling,compensationsettings,authenticated
+coverage,/workspace/team-leave-planner,Team leave planner,Attendance & workforce scheduling,compensationsettings,authenticated
+selfservice,/workspace/my-requests,My requests & shortcuts,Workspace & personal tools,workflowsettings,authenticated
+inbox,/workspace/notifications,Notification inbox,Workspace & personal tools,workflowsettings,authenticated
+calendar,/workspace/calendar,My calendar,Workspace & personal tools,workflowsettings,authenticated
+profile,/workspace/my-profile,My profile,Workspace & personal tools,workflowsettings,authenticated
+employees,/people/employee-hris,Employee HRIS,People & organization,orgsettings,authenticated
+orgchart,/people/organization-chart,Organization chart,People & organization,orgsettings,authenticated
+privateprofile,/people/private-contact-profile,Private contact profile,People & organization,orgsettings,authenticated
+skills,/people/skills-competencies,Skills & competencies,People & organization,orgsettings,authenticated
+profilemgmt,/people/profile-management,Profile management,People & organization,orgsettings,admin
+accounts,/people/account-administration,Account provisioning,People & organization,orgsettings,admin
+companysetup,/people/company-setup-import,Company setup & import,People & organization,orgsettings,admin
+orgsettings,/people/organization-settings,Organization settings,People & organization,orgsettings,admin
+settingscenter,/people/admin-settings-center,Administration settings center,Workspace & personal tools,workflowsettings,admin
+talentsettings,/people/talent-service-settings,Talent & service settings,Workspace & personal tools,workflowsettings,admin
+workflowsettings,/people/workflow-settings,Workflow settings,Workspace & personal tools,workflowsettings,admin
+organization,/people/organization,Organization,People & organization,orgsettings,authenticated
+policies,/people/policies-handbook,Policies & handbook,"Compliance, security & reporting",settingscenter,authenticated
+compliance,/people/policy-acknowledgements,Policy acknowledgements,"Compliance, security & reporting",settingscenter,authenticated
+reports,/people/reports-analytics,Reports & analytics,"Compliance, security & reporting",settingscenter,management
+audit,/people/audit-trail,Audit trail,"Compliance, security & reporting",settingscenter,admin
+readiness,/people/hr-operations-center,HR operations center,"Compliance, security & reporting",settingscenter,admin
+developer,/people/developer-console,Developer console,"Compliance, security & reporting",settingscenter,authenticated
+recruitment,/talent/recruitment-ats,Recruitment ATS,Hiring & talent operations,talentsettings,management
+candidatesearch,/talent/candidate-search-database,Candidate Search & Database,Hiring & talent operations,talentsettings,management
+interviews,/talent/interview-scheduling,Interview scheduling,Hiring & talent operations,talentsettings,management
+onboarding,/talent/onboarding,Onboarding,Hiring & talent operations,talentsettings,authenticated
+requestdesk,/talent/request-desk,Request Desk,Hiring & talent operations,talentsettings,authenticated
+helpdesk,/talent/hr-helpdesk,HR helpdesk,Hiring & talent operations,talentsettings,authenticated
+tasks,/talent/hr-tasks,HR tasks,Hiring & talent operations,talentsettings,authenticated
+tasktemplates,/talent/hr-task-templates,HR task templates,Hiring & talent operations,talentsettings,management
+offboarding,/talent/offboarding,Offboarding,Hiring & talent operations,talentsettings,authenticated
+leave,/compensation/leave-management,Leave management,Attendance & workforce scheduling,compensationsettings,authenticated
+attendance,/compensation/time-attendance,Time & attendance,Attendance & workforce scheduling,compensationsettings,authenticated
+corrections,/compensation/attendance-corrections,Attendance corrections,Attendance & workforce scheduling,compensationsettings,authenticated
+shifts,/compensation/shifts-schedules,Shifts & schedules,Attendance & workforce scheduling,compensationsettings,authenticated
+timesheets,/compensation/project-timesheets,Project timesheets,Attendance & workforce scheduling,compensationsettings,authenticated
+payrollengine,/compensation/payroll-workbench,Payroll workbench,"Payroll, compensation & benefits",compensationsettings,authenticated
+compensationsettings,/compensation/organization-settings,Compensation settings,"Payroll, compensation & benefits",compensationsettings,admin
+payroll,/compensation/payslip-archive,Payslip archive,"Payroll, compensation & benefits",compensationsettings,authenticated
+taxcalculator,/compensation/tax-calculator,Tax calculator · Global,"Payroll, compensation & benefits",compensationsettings,authenticated
+benefits,/compensation/benefits-programs,Benefits & programs,"Payroll, compensation & benefits",compensationsettings,authenticated
+expenses,/compensation/expenses-claims,Expenses & claims,"Payroll, compensation & benefits",compensationsettings,authenticated
+performance,/culture/performance-goals,Performance & goals,Performance & culture,,authenticated
+performancecycles,/culture/review-cycles,Performance review cycles,Performance & culture,,authenticated
+appraisals,/culture/employee-appraisals,Employee appraisals,Performance & culture,,authenticated
+checkins,/culture/one-on-one-checkins,1:1 check-ins,Performance & culture,,authenticated
+growthplans,/culture/development-plans,Individual development plans,Performance & culture,,authenticated
+feedbackrequests,/culture/manager-feedback,Manager feedback requests,Performance & culture,,authenticated
+followups,/culture/performance-followups,Performance action tracker,Performance & culture,,authenticated
+reviewprogress,/culture/review-progress,Review cycle progress,Performance & culture,,authenticated
+evidence,/culture/performance-evidence,Performance evidence portfolio,Performance & culture,,authenticated
+goaljournal,/culture/goal-checkin-journal,Goal check-in journal,Performance & culture,,authenticated
+career,/culture/career-development,Career development,Performance & culture,,authenticated
+training,/culture/learning-training,Learning & training,Performance & culture,,authenticated
+surveys,/culture/employee-pulse,Employee pulse,Performance & culture,,authenticated
+voice,/culture/employee-voice,Employee Voice,Performance & culture,,authenticated
+discipline,/culture/discipline-conduct,Discipline & conduct,Performance & culture,,authenticated
+recognition,/culture/recognition-wall,Recognition wall,Performance & culture,,authenticated
+workmode,/culture/work-arrangements,Work arrangement requests,Performance & culture,,authenticated
+approvals,/services/approval-inbox,Approval inbox,Employee services & approvals,talentsettings,management
+assets,/services/asset-management,Asset management,Employee services & approvals,talentsettings,authenticated
+documents,/services/employee-documents,Employee documents,Employee services & approvals,talentsettings,authenticated
+vault,/services/secure-document-vault,Secure document vault,Employee services & approvals,talentsettings,authenticated
+assistant,/ai/assistant,SASS AI Assistant,Workspace & personal tools,workflowsettings,authenticated
+settings,/settings/my-workspace,My settings,Workspace & personal tools,workflowsettings,authenticated
+mysecurity,/settings/account-security,My account security,Workspace & personal tools,workflowsettings,authenticated
+securityaudit,/people/account-security-review,Account sign-in review,"Compliance, security & reporting",settingscenter,admin

@@ -1,0 +1,54 @@
+name: SASS HRM clean-install checks
+on: [push, pull_request]
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - name: Design and release-version parity
+        working-directory: .
+        run: |
+          python scripts/verify-design-parity.py
+          python scripts/test-design-parity.py
+          python scripts/verify-v21-ui.py
+          python scripts/verify-v23-connection.py
+          python scripts/verify-v24-package.py
+          python scripts/check-feature-pages.py
+          python scripts/check-page-routing.py
+          python scripts/check-single-refresh.py
+          python scripts/check-cross-module-reliability.py
+      - name: Verify complete MySQL table schema declarations
+        run: |
+          python schema_audit.py --file-only
+          python full_mysql_schema_test.py
+          python database_feature_coverage.py --check
+          python ../scripts/verify-saritha-merge.py
+      - name: Run every backend feature regression test (isolated SQLite)
+        env:
+          SASS_HRM_TESTING: '1'
+          DB_ENGINE: sqlite
+          JWT_SECRET: test-only-strong-secret-string-0123456789-abcdef
+        run: |
+          for test_file in *_test.py; do
+            echo "Running $test_file"
+            python "$test_file"
+          done
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build

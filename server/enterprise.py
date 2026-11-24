@@ -1,0 +1,837 @@
+"""HRMS workflows with permissions and audit events. Payroll compliance and external integrations need review."""
+from __future__ import annotations
+
+import csv
+import io
+import re
+import sqlite3
+from datetime import date, datetime, timezone, timedelta
+from typing import Literal
+
+from fastapi import Depends, HTTPException
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, ConfigDict, Field
+
+from main import app, db, rows, current_user, require_hr, require_manager, audit
+
+
+def now(): return datetime.now(timezone.utc).isoformat()
+
+def inform(c, employee_id: int, title: str, message: str):
+    c.execute('INSERT INTO notifications(employee_id,title,body,created_at) VALUES(?,?,?,?)', (employee_id,title,message,now()))
+
+def needs(cond: bool, detail='Access denied', status=403):
+    if not cond: raise HTTPException(status, detail)
+
+def fetch(c, sql, args=()):
+    return rows(c.execute(sql,args))
+
+def record(c, table, item_id):
+    r=c.execute(f'SELECT * FROM {table} WHERE id=?',(item_id,)).fetchone()
+    if not r: raise HTTPException(404, 'Record not found')
+    return dict(r)
+
+def scope_sql(user, col='employee_id'):
+    if user['role']=='admin': return ('',[])
+    if user['role']=='manager':
+        return (f' WHERE ({col}=? OR {col} IN (SELECT id FROM employees WHERE manager_id=?))',[user['id'],user['id']])
+    return (f' WHERE {col}=?',[user['id']])
+
+def access_employee(user, employee_id, managers=True):
+    if user['role']=='admin' or employee_id==user['id']: return
+    if managers and user['role']=='manager':
+        with db() as c:
+            if c.execute('SELECT 1 FROM employees WHERE id=? AND manager_id=?',(employee_id,user['id'])).fetchone(): return
+    raise HTTPException(403,'Employee record is outside your permitted scope')
+
+@app.on_event('startup')
+def init_enterprise():
+    with db() as c:
+        c.executescript('''
+        CREATE TABLE IF NOT EXISTS departments (id INTEGER PRIMARY KEY,name TEXT UNIQUE NOT NULL,head_id INTEGER,location TEXT NOT NULL DEFAULT 'Hyderabad');
+        CREATE TABLE IF NOT EXISTS shifts (id INTEGER PRIMARY KEY,name TEXT NOT NULL,start_time TEXT NOT NULL,end_time TEXT NOT NULL,location TEXT NOT NULL DEFAULT 'Office');
+        CREATE TABLE IF NOT EXISTS shift_assignments (id INTEGER PRIMARY KEY,employee_id INTEGER NOT NULL,shift_id INTEGER NOT NULL,work_day TEXT NOT NULL,UNIQUE(employee_id,work_day));
+        CREATE TABLE IF NOT EXISTS holidays (id INTEGER PRIMARY KEY,name TEXT NOT NULL,day TEXT UNIQUE NOT NULL,location TEXT NOT NULL DEFAULT 'All');
+        CREATE TABLE IF NOT EXISTS announcements (id INTEGER PRIMARY KEY,title TEXT NOT NULL,body TEXT NOT NULL,created_at TEXT NOT NULL,author_id INTEGER NOT NULL);
+        CREATE TABLE IF NOT EXISTS jobs (id INTEGER PRIMARY KEY,title TEXT NOT NULL,department TEXT NOT NULL,location TEXT NOT NULL,employment_type TEXT NOT NULL,openings INTEGER NOT NULL DEFAULT 1,status TEXT NOT NULL DEFAULT 'Open',created_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS onboarding (id INTEGER PRIMARY KEY,employee_id INTEGER NOT NULL,title TEXT NOT NULL,due_date TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'Pending',FOREIGN KEY(employee_id) REFERENCES employees(id));
+        CREATE TABLE IF NOT EXISTS goals (id INTEGER PRIMARY KEY,employee_id INTEGER NOT NULL,title TEXT NOT NULL,description TEXT NOT NULL DEFAULT '',due_date TEXT NOT NULL,progress INTEGER NOT NULL DEFAULT 0,status TEXT NOT NULL DEFAULT 'In Progress',FOREIGN KEY(employee_id) REFERENCES employees(id));
+        CREATE TABLE IF NOT EXISTS reviews (id INTEGER PRIMARY KEY,employee_id INTEGER NOT NULL,reviewer_id INTEGER NOT NULL,cycle TEXT NOT NULL,rating INTEGER NOT NULL,feedback TEXT NOT NULL,created_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS courses (id INTEGER PRIMARY KEY,title TEXT NOT NULL,category TEXT NOT NULL,duration_hours INTEGER NOT NULL,description TEXT NOT NULL DEFAULT '');
+        CREATE TABLE IF NOT EXISTS enrollments (id INTEGER PRIMARY KEY,employee_id INTEGER NOT NULL,course_id INTEGER NOT NULL,status TEXT NOT NULL DEFAULT 'Enrolled',enrolled_at TEXT NOT NULL,UNIQUE(employee_id,course_id));
+        CREATE TABLE IF NOT EXISTS tickets (id INTEGER PRIMARY KEY,employee_id INTEGER NOT NULL,subject TEXT NOT NULL,category TEXT NOT NULL,description TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'Open',priority TEXT NOT NULL DEFAULT 'Normal',created_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS assets (id INTEGER PRIMARY KEY,employee_id INTEGER NOT NULL,asset_name TEXT NOT NULL,serial_number TEXT NOT NULL UNIQUE,status TEXT NOT NULL DEFAULT 'Assigned',assigned_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS documents (id INTEGER PRIMARY KEY,employee_id INTEGER NOT NULL,title TEXT NOT NULL,document_type TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'Pending',created_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS offboarding (id INTEGER PRIMARY KEY,employee_id INTEGER NOT NULL,last_working_day TEXT NOT NULL,reason TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'Requested',created_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS expenses (id INTEGER PRIMARY KEY,employee_id INTEGER NOT NULL,title TEXT NOT NULL,amount REAL NOT NULL,currency TEXT NOT NULL DEFAULT 'INR',category TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'Pending',created_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS notifications (id INTEGER PRIMARY KEY,employee_id INTEGER NOT NULL,title TEXT NOT NULL,body TEXT NOT NULL,is_read INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL);
+        CREATE INDEX IF NOT EXISTS idx_tickets_employee ON tickets(employee_id);
+        CREATE INDEX IF NOT EXISTS idx_goals_employee ON goals(employee_id);
+        CREATE INDEX IF NOT EXISTS idx_onboarding_employee ON onboarding(employee_id);
+        CREATE INDEX IF NOT EXISTS idx_expenses_employee ON expenses(employee_id);
+        CREATE INDEX IF NOT EXISTS idx_notifications_employee ON notifications(employee_id);
+        ''')
+
+class DeptIn(BaseModel):
+    name: str=Field(min_length=2,max_length=80)
+    location: str=Field(min_length=2,max_length=80)
+    head_id: int|None=None
+class HolidayIn(BaseModel):
+    name: str=Field(min_length=2,max_length=100)
+    day: date
+    location: str=Field(default='All',min_length=2,max_length=80)
+class AnnouncementIn(BaseModel):
+    title: str=Field(min_length=3,max_length=150)
+    body: str=Field(min_length=5,max_length=3000)
+class JobIn(BaseModel):
+    title: str=Field(min_length=3,max_length=120)
+    department: str
+    location: str
+    employment_type: Literal['Full-time','Part-time','Internship','Contract']='Full-time'
+    openings: int=Field(default=1,ge=1,le=99)
+class JobStatus(BaseModel):
+    status: Literal['Open','Paused','Closed']
+class CandidateStage(BaseModel):
+    stage: Literal['Applied','Screening','Assessment','Interview','Offer','Hired','Rejected']
+class EmployeePatch(BaseModel):
+    # Edit official HR details only; access roles, passwords and database IDs are separate.
+    model_config = ConfigDict(extra='forbid')
+    code: str|None=Field(default=None,min_length=3,max_length=50)
+    name: str|None=Field(default=None,min_length=2,max_length=100)
+    email: str|None=Field(default=None,min_length=6,max_length=200)
+    work_email: str|None=Field(default=None,min_length=6,max_length=200)
+    designation: str|None=Field(default=None,min_length=2,max_length=120)
+    department: str|None=Field(default=None,min_length=2,max_length=100)
+    location: str|None=Field(default=None,min_length=2,max_length=100)
+    work_mode: Literal['Remote','Hybrid','On-site']|None=None
+    join_date: date|None=None
+    manager_id: int|None=None
+    change_reason: str=Field(default='',max_length=450)
+class OnboardIn(BaseModel):
+    employee_id: int
+    title: str=Field(min_length=3,max_length=150)
+    due_date: date
+class StatusOnly(BaseModel):
+    status: Literal['Pending','Completed']
+class GoalIn(BaseModel):
+    employee_id: int
+    title: str=Field(min_length=3,max_length=150)
+    description: str=Field(default='',max_length=1000)
+    due_date: date
+class GoalProgress(BaseModel):
+    progress: int=Field(ge=0,le=100)
+    note: str=Field(default="",max_length=1000)
+class ReviewIn(BaseModel):
+    employee_id: int
+    cycle: str=Field(min_length=3,max_length=40)
+    rating: int=Field(ge=1,le=5)
+    feedback: str=Field(min_length=5,max_length=1200)
+class CourseIn(BaseModel):
+    title: str=Field(min_length=3,max_length=150)
+    category: str
+    duration_hours: int=Field(ge=1,le=500)
+    description: str=''
+class EnrollmentIn(BaseModel):
+    course_id: int
+class EnrollmentState(BaseModel):
+    status: Literal['Enrolled','In Progress','Completed']
+class TicketIn(BaseModel):
+    subject: str=Field(min_length=3,max_length=180)
+    category: Literal['General','IT Support','Payroll','Facilities','Leave','Other']='General'
+    description: str=Field(min_length=5,max_length=2000)
+    priority: Literal['Low','Normal','High']='Normal'
+class TicketState(BaseModel):
+    status: Literal['Open','In Progress','Resolved','Closed']
+class AssetIn(BaseModel):
+    employee_id: int
+    asset_name: str=Field(min_length=2,max_length=120)
+    serial_number: str=Field(min_length=3,max_length=100)
+class DocumentIn(BaseModel):
+    employee_id: int
+    title: str=Field(min_length=3,max_length=120)
+    document_type: Literal['Contract','HR Form','Compliance','Certificate','Other']='HR Form'
+class OffboardIn(BaseModel):
+    last_working_day: date
+    reason: str=Field(min_length=4,max_length=500)
+class OffboardState(BaseModel):
+    status: Literal['Requested','Under Review','Approved','Closed']
+class ExpenseIn(BaseModel):
+    title: str=Field(min_length=3,max_length=150)
+    amount: float=Field(gt=0,le=500000,allow_inf_nan=False)
+    category: Literal['Travel','Connectivity','Meals','Equipment','Other']='Other'
+    expense_date: date|None=None
+    merchant: str=Field(default='',max_length=150)
+    business_purpose: str=Field(default='',max_length=1000)
+    cost_center: str=Field(default='',max_length=80)
+    receipt_reference: str=Field(default='',max_length=240)
+class ExpenseState(BaseModel):
+    status: Literal['Approved','Rejected']
+    reason: str=Field(min_length=5,max_length=500)
+
+class ShiftIn(BaseModel):
+    name: str=Field(min_length=2,max_length=100)
+    start_time: str=Field(pattern=r'^([01]\d|2[0-3]):[0-5]\d$')
+    end_time: str=Field(pattern=r'^([01]\d|2[0-3]):[0-5]\d$')
+    location: str='Office'
+class ShiftAssignmentIn(BaseModel):
+    employee_id: int
+    shift_id: int
+    work_day: date
+
+@app.get('/api/shifts')
+def shifts(user=Depends(current_user)):
+    with db() as c: return fetch(c,'SELECT * FROM shifts ORDER BY id')
+
+@app.post('/api/shifts',status_code=201)
+def new_shift(body:ShiftIn,user=Depends(require_hr)):
+    if body.start_time == body.end_time:
+        raise HTTPException(422,'Shift start and end times must differ')
+    with db() as c:
+        r=c.execute('INSERT INTO shifts(name,start_time,end_time,location) VALUES(?,?,?,?)',(body.name,body.start_time,body.end_time,body.location))
+        audit(c,user['id'],'shift.created',f'shift:{r.lastrowid}')
+        return {'id':r.lastrowid}
+
+@app.get('/api/schedule')
+def schedule(user=Depends(current_user)):
+    clause,args=scope_sql(user,'sa.employee_id')
+    with db() as c:
+        return fetch(c,'SELECT sa.*,e.name AS employee_name,s.name AS shift_name,s.start_time,s.end_time,s.location FROM shift_assignments sa JOIN employees e ON e.id=sa.employee_id JOIN shifts s ON s.id=sa.shift_id'+clause+' ORDER BY sa.work_day DESC',args)
+
+@app.post('/api/schedule',status_code=201)
+def assign_shift(body:ShiftAssignmentIn,user=Depends(require_manager)):
+    access_employee(user,body.employee_id)
+    with db() as c:
+        record(c,'shifts',body.shift_id)
+        needs(c.execute('SELECT 1 FROM employees WHERE id=? AND account_active=1',(body.employee_id,)).fetchone() is not None,'Active employee not found',422)
+        approved_leave=c.execute('''SELECT 1 FROM leave_requests WHERE employee_id=? AND status='Approved'
+            AND start_date<=? AND end_date>=? LIMIT 1''',
+            (body.employee_id,body.work_day.isoformat(),body.work_day.isoformat())).fetchone()
+        needs(approved_leave is None,'Cannot schedule an employee on approved leave',409)
+        try: r=c.execute('INSERT INTO shift_assignments(employee_id,shift_id,work_day) VALUES(?,?,?)',(body.employee_id,body.shift_id,str(body.work_day)))
+        except sqlite3.IntegrityError: raise HTTPException(409,'A shift is already assigned on that date')
+        audit(c,user['id'],'shift.assigned',f'shift_assignment:{r.lastrowid}')
+        return {'id':r.lastrowid}
+
+
+class ShiftDeleteIn(BaseModel):
+    confirm: Literal['DELETE']
+    reason: str = Field(min_length=5, max_length=500)
+
+
+def shift_delete_reason(body: ShiftDeleteIn) -> str:
+    reason = body.reason.strip()
+    if len(reason) < 5:
+        raise HTTPException(422, 'Deletion reason must be at least 5 characters')
+    return reason
+
+
+@app.put('/api/shifts/{shift_id}')
+def update_shift_template(shift_id: int, body: ShiftIn, user=Depends(require_hr)):
+    if body.start_time == body.end_time or not body.name.strip() or not body.location.strip():
+        raise HTTPException(422, 'Shift requires a name, location and different start/end times')
+    with db() as c:
+        existing = record(c, 'shifts', shift_id)
+        desired = (body.name.strip(), body.start_time, body.end_time, body.location.strip())
+        original = tuple(existing[k] for k in ('name', 'start_time', 'end_time', 'location'))
+        if desired != original:
+            used = c.execute('SELECT 1 FROM shift_assignments WHERE shift_id=? LIMIT 1', (shift_id,)).fetchone()
+            if used:
+                raise HTTPException(409, 'This shift has scheduled assignments. Create a new shift template instead of changing historical schedules')
+            c.execute('UPDATE shifts SET name=?,start_time=?,end_time=?,location=? WHERE id=?', (*desired, shift_id))
+            audit(c, user['id'], 'shift.updated', f'shift:{shift_id}')
+    return {'message': 'Shift updated'}
+
+
+@app.delete('/api/shifts/{shift_id}')
+def delete_shift_template(shift_id: int, body: ShiftDeleteIn, user=Depends(require_hr)):
+    reason = shift_delete_reason(body)
+    with db() as c:
+        record(c, 'shifts', shift_id)
+        if c.execute('SELECT 1 FROM shift_assignments WHERE shift_id=? LIMIT 1', (shift_id,)).fetchone():
+            raise HTTPException(409, 'Shift is assigned to employee schedules; remove future assignments first. Historical assignments cannot be deleted here')
+        c.execute('DELETE FROM shifts WHERE id=?', (shift_id,))
+        audit(c, user['id'], 'shift.deleted', f'shift:{shift_id}', reason)
+    return {'message': 'Shift deleted'}
+
+
+def check_shift_assignment(c, employee_id: int, shift_id: int, work_day: date, exclude_id: int = -1):
+    record(c, 'shifts', shift_id)
+    needs(c.execute('SELECT 1 FROM employees WHERE id=? AND account_active=1', (employee_id,)).fetchone() is not None,
+          'Active employee not found', 422)
+    d = work_day.isoformat()
+    approved_leave = c.execute("SELECT 1 FROM leave_requests WHERE employee_id=? AND status='Approved' AND start_date<=? AND end_date>=? LIMIT 1", (employee_id, d, d)).fetchone()
+    needs(approved_leave is None, 'Cannot schedule an employee on approved leave', 409)
+    conflict = c.execute("SELECT 1 FROM shift_assignments WHERE employee_id=? AND work_day=? AND id<>? LIMIT 1", (employee_id, d, exclude_id)).fetchone()
+    needs(conflict is None, 'An employee shift is already assigned on that date', 409)
+
+
+@app.put('/api/schedule/{assignment_id}')
+def update_shift_assignment(assignment_id: int, body: ShiftAssignmentIn, user=Depends(require_manager)):
+    with db() as c:
+        old = record(c, 'shift_assignments', assignment_id)
+    access_employee(user, old['employee_id'])
+    access_employee(user, body.employee_id)
+    if str(old['work_day'])[:10] < date.today().isoformat():
+        raise HTTPException(409, 'Past shifts are historical records; use the attendance correction workflow')
+    if body.work_day < date.today():
+        raise HTTPException(422, 'A schedule cannot be moved to a past date')
+    with db() as c:
+        check_shift_assignment(c, body.employee_id, body.shift_id, body.work_day, assignment_id)
+        c.execute('UPDATE shift_assignments SET employee_id=?,shift_id=?,work_day=? WHERE id=?',
+                  (body.employee_id, body.shift_id, body.work_day.isoformat(), assignment_id))
+        audit(c, user['id'], 'shift.assignment.updated', f'shift_assignment:{assignment_id}')
+    return {'message': 'Scheduled shift updated'}
+
+
+@app.delete('/api/schedule/{assignment_id}')
+def delete_shift_assignment(assignment_id: int, body: ShiftDeleteIn, user=Depends(require_manager)):
+    reason = shift_delete_reason(body)
+    with db() as c:
+        old = record(c, 'shift_assignments', assignment_id)
+    access_employee(user, old['employee_id'])
+    if str(old['work_day'])[:10] < date.today().isoformat():
+        raise HTTPException(409, 'Past shifts are preserved as historical records')
+    with db() as c:
+        c.execute('DELETE FROM shift_assignments WHERE id=?', (assignment_id,))
+        audit(c, user['id'], 'shift.assignment.deleted', f'shift_assignment:{assignment_id}', reason)
+    return {'message': 'Scheduled shift removed'}
+
+# Organization workspace CRUD. Existing tables are reused; no seed data or schema changes.
+# Admin writes are transactionally audited; department dependencies must be handled
+# explicitly so removing a department never silently detaches staff or job postings.
+class OrganizationDelete(BaseModel):
+    confirm: Literal['DELETE']
+    reason: str=Field(min_length=5,max_length=500)
+
+
+def valid_delete_reason(body:OrganizationDelete)->str:
+    reason=body.reason.strip()
+    if len(reason)<5: raise HTTPException(422,'A meaningful deletion reason of at least 5 characters is required')
+    return reason
+
+
+def clean_text(value: str, field: str) -> str:
+    cleaned=value.strip()
+    if not cleaned:
+        raise HTTPException(422,f'{field} cannot be blank')
+    return cleaned
+
+
+def valid_department_head(conn, head_id: int|None, department: str):
+    if head_id is None:
+        return
+    manager=conn.execute('SELECT id,department,role FROM employees WHERE id=?',(head_id,)).fetchone()
+    if not manager or manager['role'] not in ('manager','admin') or manager['department'].casefold()!=department.casefold():
+        raise HTTPException(422,'Department head must be a manager or administrator assigned to that department')
+
+
+def department_usage(conn, name: str) -> dict:
+    return {
+        'employees':int(conn.execute('SELECT COUNT(*) FROM employees WHERE LOWER(department)=LOWER(?)',(name,)).fetchone()[0]),
+        'job_postings':int(conn.execute('SELECT COUNT(*) FROM jobs WHERE LOWER(department)=LOWER(?)',(name,)).fetchone()[0]),
+        'job_descriptions':int(conn.execute('SELECT COUNT(*) FROM recruitment_job_descriptions WHERE LOWER(department)=LOWER(?)',(name,)).fetchone()[0]),
+    }
+
+
+@app.get('/api/organization/departments')
+def departments(user=Depends(current_user)):
+    with db() as c:
+        return fetch(c, 'SELECT * FROM departments ORDER BY name')
+
+
+@app.post('/api/organization/departments',status_code=201)
+def create_dept(body:DeptIn,user=Depends(require_hr)):
+    name=clean_text(body.name,'Department name')
+    location=clean_text(body.location,'Primary location')
+    with db() as c:
+        valid_department_head(c,body.head_id,name)
+        if c.execute('SELECT 1 FROM departments WHERE LOWER(name)=LOWER(?)',(name,)).fetchone():
+            raise HTTPException(409,'Department name already exists')
+        try:
+            r=c.execute('INSERT INTO departments(name,location,head_id) VALUES(?,?,?)',(name,location,body.head_id))
+        except sqlite3.IntegrityError:
+            raise HTTPException(409,'Department name already exists')
+        audit(c,user['id'],'department.created',f'department:{r.lastrowid}',name)
+        return {'id':r.lastrowid}
+
+
+@app.put('/api/organization/departments/{department_id}')
+def edit_dept(department_id:int,body:DeptIn,user=Depends(require_hr)):
+    name=clean_text(body.name,'Department name')
+    location=clean_text(body.location,'Primary location')
+    with db() as c:
+        old=record(c,'departments',department_id)
+        if old['name'].casefold()!=name.casefold():
+            usage=department_usage(c,old['name'])
+            if any(usage.values()):
+                raise HTTPException(409,'Reassign employees, job postings and JD records before renaming this department')
+        if c.execute('SELECT 1 FROM departments WHERE LOWER(name)=LOWER(?) AND id<>?',(name,department_id)).fetchone():
+            raise HTTPException(409,'Department name already exists')
+        valid_department_head(c,body.head_id,name)
+        try:
+            c.execute('UPDATE departments SET name=?,location=?,head_id=? WHERE id=?',(name,location,body.head_id,department_id))
+        except sqlite3.IntegrityError:
+            raise HTTPException(409,'Department name already exists')
+        audit(c,user['id'],'department.updated',f'department:{department_id}',f"{old['name']} → {name}; location: {old['location']} → {location}")
+    return {'message':'Department updated'}
+
+
+@app.delete('/api/organization/departments/{department_id}')
+def remove_dept(department_id:int,body:OrganizationDelete,user=Depends(require_hr)):
+    reason=valid_delete_reason(body)
+    with db() as c:
+        old=record(c,'departments',department_id)
+        usage=department_usage(c,old['name'])
+        if any(usage.values()):
+            raise HTTPException(409,'Department is still in use by employees, jobs or JDs. Reassign these records first.')
+        try:
+            c.execute('DELETE FROM departments WHERE id=?',(department_id,))
+        except sqlite3.IntegrityError:
+            raise HTTPException(409,'This department is linked to other HR records and cannot be deleted')
+        audit(c,user['id'],'department.deleted',f'department:{department_id}',f"{old['name']}; reason: {reason}")
+    return {'message':'Department permanently deleted'}
+
+
+@app.get('/api/organization/holidays')
+def holidays(user=Depends(current_user)):
+    with db() as c: return fetch(c,'SELECT * FROM holidays ORDER BY day')
+
+
+@app.post('/api/organization/holidays',status_code=201)
+def create_holiday(body:HolidayIn,user=Depends(require_hr)):
+    name=clean_text(body.name,'Holiday name')
+    location=clean_text(body.location,'Holiday location')
+    with db() as c:
+        try:r=c.execute('INSERT INTO holidays(name,day,location) VALUES(?,?,?)',(name,body.day.isoformat(),location))
+        except sqlite3.IntegrityError:raise HTTPException(409,'Holiday already recorded for this date')
+        audit(c,user['id'],'holiday.created',f'holiday:{r.lastrowid}',name)
+        return {'id':r.lastrowid}
+
+
+@app.put('/api/organization/holidays/{holiday_id}')
+def edit_holiday(holiday_id:int,body:HolidayIn,user=Depends(require_hr)):
+    name=clean_text(body.name,'Holiday name')
+    location=clean_text(body.location,'Holiday location')
+    with db() as c:
+        old=record(c,'holidays',holiday_id)
+        try:c.execute('UPDATE holidays SET name=?,day=?,location=? WHERE id=?',(name,body.day.isoformat(),location,holiday_id))
+        except sqlite3.IntegrityError:raise HTTPException(409,'Holiday already recorded for this date')
+        audit(c,user['id'],'holiday.updated',f'holiday:{holiday_id}',f"{old['name']} ({old['day']}) → {name} ({body.day.isoformat()})")
+    return {'message':'Holiday updated'}
+
+
+@app.delete('/api/organization/holidays/{holiday_id}')
+def remove_holiday(holiday_id:int,body:OrganizationDelete,user=Depends(require_hr)):
+    reason=valid_delete_reason(body)
+    with db() as c:
+        old=record(c,'holidays',holiday_id)
+        c.execute('DELETE FROM holidays WHERE id=?',(holiday_id,))
+        audit(c,user['id'],'holiday.deleted',f'holiday:{holiday_id}',f"{old['name']}; {old['day']}; reason: {reason}")
+    return {'message':'Holiday permanently deleted'}
+
+
+@app.get('/api/organization/announcements')
+def announcements(user=Depends(current_user)):
+    with db() as c: return fetch(c,'SELECT a.*,e.name AS author_name FROM announcements a JOIN employees e ON e.id=a.author_id ORDER BY a.id DESC LIMIT 100')
+
+
+@app.post('/api/organization/announcements',status_code=201)
+def create_announcement(body:AnnouncementIn,user=Depends(require_hr)):
+    title=clean_text(body.title,'Announcement title')
+    text=clean_text(body.body,'Announcement text')
+    with db() as c:
+        r=c.execute('INSERT INTO announcements(title,body,created_at,author_id) VALUES(?,?,?,?)',(title,text,now(),user['id']))
+        audit(c,user['id'],'announcement.published',f'announcement:{r.lastrowid}',title)
+        return {'id':r.lastrowid}
+
+
+@app.put('/api/organization/announcements/{announcement_id}')
+def edit_announcement(announcement_id:int,body:AnnouncementIn,user=Depends(require_hr)):
+    title=clean_text(body.title,'Announcement title')
+    text=clean_text(body.body,'Announcement text')
+    with db() as c:
+        old=record(c,'announcements',announcement_id)
+        c.execute('UPDATE announcements SET title=?,body=? WHERE id=?',(title,text,announcement_id))
+        audit(c,user['id'],'announcement.updated',f'announcement:{announcement_id}',f"{old['title']} → {title}")
+    return {'message':'Announcement updated'}
+
+
+@app.delete('/api/organization/announcements/{announcement_id}')
+def remove_announcement(announcement_id:int,body:OrganizationDelete,user=Depends(require_hr)):
+    reason=valid_delete_reason(body)
+    with db() as c:
+        old=record(c,'announcements',announcement_id)
+        c.execute('DELETE FROM announcements WHERE id=?',(announcement_id,))
+        audit(c,user['id'],'announcement.deleted',f'announcement:{announcement_id}',f"{old['title']}; reason: {reason}")
+    return {'message':'Announcement permanently deleted'}
+
+
+@app.patch('/api/employees/{employee_id}')
+def update_employee(employee_id:int,body:EmployeePatch,user=Depends(require_hr)):
+    # Linked HR modules use the unchanging numeric employees.id, not the editable code.
+    fields=body.model_dump(exclude_unset=True)
+    reason=(fields.pop('change_reason','') or '').strip()
+    if not fields: raise HTTPException(422,'No changes supplied')
+    for key,value in list(fields.items()):
+        if key=='manager_id': continue  # Explicit null removes a reporting manager.
+        if value is None: raise HTTPException(422,f'{key} cannot be empty')
+        if key=='join_date':
+            fields[key]=value.isoformat()
+        elif isinstance(value,str):
+            fields[key]=value.strip()
+            if key in ('email','work_email'):
+                fields[key]=fields[key].lower()
+                if not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',fields[key]):
+                    raise HTTPException(422,f'Enter a valid {key.replace("_"," ")} address')
+            elif key=='code':
+                if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{2,49}',fields[key]):
+                    raise HTTPException(422,'Employee code must use 3–50 letters, numbers, dots, underscores or hyphens')
+            elif key in ('name','designation','department','location') and len(fields[key])<2:
+                raise HTTPException(422,f'{key.replace("_"," ").title()} must be at least 2 characters')
+    with db() as c:
+        old=record(c,'employees',employee_id)
+        next_values={key:value for key,value in fields.items() if value!=old.get(key)}
+        if not next_values: return {'status':'unchanged','sessions_revoked':False,'changed_fields':[]}
+        if ('code' in next_values or 'join_date' in next_values) and len(reason)<6:
+            raise HTTPException(422,'Provide a reason (at least 6 characters) when changing employee code or joining date')
+        if 'code' in next_values:
+            if c.execute('SELECT id FROM employees WHERE id<>? AND lower(code)=lower(?) LIMIT 1',
+                         (employee_id,fields['code'])).fetchone():
+                raise HTTPException(409,'Employee code already belongs to another employee')
+        if 'email' in next_values or 'work_email' in next_values:
+            new_email=fields.get('email',old['email'])
+            new_work_email=fields.get('work_email',old['work_email'] or old['email'])
+            if c.execute('SELECT id FROM employees WHERE id<>? AND (lower(email) IN (?,?) OR lower(work_email) IN (?,?)) LIMIT 1',
+                (employee_id,new_email,new_work_email,new_email,new_work_email)).fetchone():
+                raise HTTPException(409,'Sign-in or work email belongs to another employee')
+        if 'manager_id' in next_values and next_values['manager_id'] is not None:
+            manager_id=next_values['manager_id']
+            needs(manager_id!=employee_id,'Employee cannot manage themselves',422)
+            needs(c.execute("SELECT 1 FROM employees WHERE id=? AND role IN ('admin','manager')",
+                            (manager_id,)).fetchone() is not None,'Manager not found',422)
+            ancestor=manager_id
+            visited=set()
+            while ancestor is not None:
+                needs(ancestor!=employee_id and ancestor not in visited,
+                      'Reporting chain cannot contain a cycle',422)
+                visited.add(ancestor)
+                node=c.execute('SELECT manager_id FROM employees WHERE id=?',(ancestor,)).fetchone()
+                ancestor=node['manager_id'] if node else None
+        login_changed=('email' in next_values or 'work_email' in next_values)
+        setters=', '.join(f'{key}=?' for key in next_values)
+        if login_changed: setters+=', session_version=session_version+1'
+        try:
+            c.execute(f'UPDATE employees SET {setters} WHERE id=?',
+                      [*next_values.values(),employee_id])
+        except sqlite3.IntegrityError as exc:
+            # Also covers a competing edit after preflight duplicate checks. MySQL
+            # adapter maps duplicate-key failures to sqlite3.IntegrityError.
+            raise HTTPException(409,'Employee code or email already belongs to another account') from exc
+        detail='Fields changed: '+','.join(next_values)
+        if 'code' in next_values: detail+=f'; Staff code: {old["code"]} -> {next_values["code"]}'
+        if reason: detail+='; Reason: '+reason
+        audit(c,user['id'],'employee.updated',f'employee:{employee_id}',detail)
+    return {'status':'updated','sessions_revoked':login_changed,
+            'changed_fields':list(next_values)}
+
+@app.get('/api/leave/balances/me')
+def leave_balances(user=Depends(current_user)):
+    with db() as c:
+        entitlement={r['leave_type']:r['days'] for r in fetch(c,'SELECT leave_type,days FROM leave_entitlements')}
+        used=fetch(c,"SELECT leave_type,SUM(days) used FROM leave_requests WHERE employee_id=? AND status='Approved' AND substr(start_date,1,4)=? GROUP BY leave_type",(user['id'],str(date.today().year)))
+    tally={r['leave_type']:r['used'] for r in used}
+    return [{'type':k,'entitled':v,'used':tally.get(k,0),'remaining':max(0,v-tally.get(k,0))} for k,v in entitlement.items()]
+
+@app.get('/api/recruitment/jobs')
+def get_jobs(user=Depends(require_manager)):
+    with db() as c: return fetch(c,'SELECT * FROM jobs ORDER BY id DESC')
+
+@app.post('/api/recruitment/jobs',status_code=201)
+def create_job(body:JobIn,user=Depends(require_hr)):
+    with db() as c:
+        r=c.execute('INSERT INTO jobs(title,department,location,employment_type,openings,created_at) VALUES(?,?,?,?,?,?)',(body.title,body.department,body.location,body.employment_type,body.openings,now()))
+        audit(c,user['id'],'job.created',f'job:{r.lastrowid}')
+        return {'id':r.lastrowid}
+
+@app.patch('/api/recruitment/jobs/{job_id}')
+def update_job(job_id:int,body:JobStatus,user=Depends(require_hr)):
+    with db() as c:
+        record(c,'jobs',job_id)
+        c.execute('UPDATE jobs SET status=? WHERE id=?',(body.status,job_id))
+        audit(c,user['id'],'job.status',f'job:{job_id}',body.status)
+        return {'status':body.status}
+
+@app.patch('/api/candidates/{candidate_id}/stage')
+def candidate_stage(candidate_id:int,body:CandidateStage,user=Depends(require_manager)):
+    needs(user['role']=='admin' or body.stage not in ('Offer','Hired'),
+          'Only HR administrators can place candidates into Offer or Hired stages.',403)
+    with db() as c:
+        existing=record(c,'candidates',candidate_id)
+        needs(user['role']=='admin' or existing['stage'] not in ('Offer','Hired'),
+              'Only HR administrators can alter an offer or hired candidate.',403)
+        c.execute('UPDATE candidates SET stage=? WHERE id=?',(body.stage,candidate_id))
+        audit(c,user['id'],'candidate.stage',f'candidate:{candidate_id}',body.stage)
+        return {'stage':body.stage}
+
+@app.get('/api/onboarding')
+def get_onboarding(user=Depends(current_user)):
+    clause,args=scope_sql(user,'o.employee_id')
+    with db() as c: return fetch(c,'SELECT o.*,e.name AS employee_name FROM onboarding o JOIN employees e ON e.id=o.employee_id'+clause+' ORDER BY o.id DESC',args)
+
+@app.post('/api/onboarding',status_code=201)
+def create_onboarding(body:OnboardIn,user=Depends(require_hr)):
+    with db() as c:
+        needs(c.execute('SELECT 1 FROM employees WHERE id=?',(body.employee_id,)).fetchone() is not None,'Employee not found',422)
+        r=c.execute('INSERT INTO onboarding(employee_id,title,due_date) VALUES(?,?,?)',(body.employee_id,body.title,str(body.due_date)))
+        inform(c,body.employee_id,'New onboarding task',body.title)
+        audit(c,user['id'],'onboarding.task_created',f'onboarding:{r.lastrowid}')
+        return {'id':r.lastrowid}
+
+@app.patch('/api/onboarding/{item_id}')
+def complete_onboarding(item_id:int,body:StatusOnly,user=Depends(current_user)):
+    with db() as c:
+        item=record(c,'onboarding',item_id)
+        needs(user['role']=='admin' or item['employee_id']==user['id'])
+        c.execute('UPDATE onboarding SET status=? WHERE id=?',(body.status,item_id))
+        audit(c,user['id'],'onboarding.updated',f'onboarding:{item_id}',body.status)
+        return {'status':body.status}
+
+@app.get('/api/performance/goals')
+def get_goals(user=Depends(current_user)):
+    clause,args=scope_sql(user,'g.employee_id')
+    with db() as c: return fetch(c,'SELECT g.*,e.name AS employee_name FROM goals g JOIN employees e ON e.id=g.employee_id'+clause+' ORDER BY g.id DESC',args)
+
+@app.post('/api/performance/goals',status_code=201)
+def create_goal(body:GoalIn,user=Depends(current_user)):
+    access_employee(user,body.employee_id)
+    with db() as c:
+        needs(c.execute('SELECT 1 FROM employees WHERE id=?',(body.employee_id,)).fetchone() is not None,'Employee not found',422)
+        r=c.execute('INSERT INTO goals(employee_id,title,description,due_date) VALUES(?,?,?,?)',(body.employee_id,body.title,body.description,str(body.due_date)))
+        audit(c,user['id'],'goal.created',f'goal:{r.lastrowid}')
+        return {'id':r.lastrowid}
+
+@app.patch('/api/performance/goals/{goal_id}')
+def goal_progress(goal_id:int,body:GoalProgress,user=Depends(current_user)):
+    with db() as c:
+        goal=record(c,'goals',goal_id)
+        access_employee(user,goal['employee_id'])
+        state='Completed' if body.progress==100 else 'In Progress'
+        if body.progress == goal['progress'] and not body.note.strip():
+            raise HTTPException(409,'No progress change to record')
+        c.execute('UPDATE goals SET progress=?,status=? WHERE id=?',(body.progress,state,goal_id))
+        c.execute('''INSERT INTO goal_progress_history(goal_id,actor_id,old_progress,new_progress,note,created_at)
+                     VALUES(?,?,?,?,?,?)''',(goal_id,user['id'],goal['progress'],body.progress,body.note.strip(),now()))
+        audit(c,user['id'],'goal.progress',f'goal:{goal_id}',str(body.progress))
+        return {'progress':body.progress,'status':state}
+
+@app.get('/api/performance/reviews')
+def get_reviews(user=Depends(current_user)):
+    clause,args=scope_sql(user,'r.employee_id')
+    with db() as c: return fetch(c,'SELECT r.*,e.name AS employee_name,m.name AS reviewer_name FROM reviews r JOIN employees e ON e.id=r.employee_id JOIN employees m ON m.id=r.reviewer_id'+clause+' ORDER BY r.id DESC',args)
+
+@app.post('/api/performance/reviews',status_code=201)
+def create_review(body:ReviewIn,user=Depends(require_manager)):
+    needs(body.employee_id!=user['id'],'Cannot review yourself')
+    access_employee(user,body.employee_id)
+    with db() as c:
+        needs(c.execute('SELECT 1 FROM employees WHERE id=?',(body.employee_id,)).fetchone() is not None,'Employee not found',422)
+        r=c.execute('INSERT INTO reviews(employee_id,reviewer_id,cycle,rating,feedback,created_at) VALUES(?,?,?,?,?,?)',(body.employee_id,user['id'],body.cycle,body.rating,body.feedback,now()))
+        inform(c,body.employee_id,'Performance review available',f'A review was added for {body.cycle}.')
+        audit(c,user['id'],'review.created',f'review:{r.lastrowid}')
+        return {'id':r.lastrowid}
+
+@app.get('/api/training/courses')
+def get_courses(user=Depends(current_user)):
+    with db() as c: return fetch(c,'SELECT * FROM courses ORDER BY id')
+
+@app.post('/api/training/courses',status_code=201)
+def create_course(body:CourseIn,user=Depends(require_hr)):
+    with db() as c:
+        r=c.execute('INSERT INTO courses(title,category,duration_hours,description) VALUES(?,?,?,?)',(body.title,body.category,body.duration_hours,body.description))
+        audit(c,user['id'],'course.created',f'course:{r.lastrowid}')
+        return {'id':r.lastrowid}
+
+@app.get('/api/training/enrollments')
+def get_enrollments(user=Depends(current_user)):
+    clause,args=scope_sql(user,'en.employee_id')
+    with db() as c: return fetch(c,'SELECT en.*,e.name AS employee_name,co.title AS course_title FROM enrollments en JOIN employees e ON e.id=en.employee_id JOIN courses co ON co.id=en.course_id'+clause+' ORDER BY en.id DESC',args)
+
+@app.post('/api/training/enrollments',status_code=201)
+def enroll_course(body:EnrollmentIn,user=Depends(current_user)):
+    with db() as c:
+        record(c,'courses',body.course_id)
+        try: r=c.execute('INSERT INTO enrollments(employee_id,course_id,enrolled_at) VALUES(?,?,?)',(user['id'],body.course_id,now()))
+        except sqlite3.IntegrityError: raise HTTPException(409,'Already enrolled in this course')
+        audit(c,user['id'],'training.enrolled',f'enrollment:{r.lastrowid}')
+        return {'id':r.lastrowid}
+
+@app.patch('/api/training/enrollments/{enrollment_id}')
+def update_enrollment(enrollment_id:int,body:EnrollmentState,user=Depends(current_user)):
+    with db() as c:
+        item=record(c,'enrollments',enrollment_id)
+        needs(item['employee_id']==user['id'] or user['role']=='admin')
+        c.execute('UPDATE enrollments SET status=? WHERE id=?',(body.status,enrollment_id))
+        audit(c,user['id'],'training.updated',f'enrollment:{enrollment_id}',body.status)
+        return {'status':body.status}
+
+@app.get('/api/helpdesk/tickets')
+def get_tickets(user=Depends(current_user)):
+    clause,args=('',[]) if user['role']=='admin' else (' WHERE t.employee_id=?',[user['id']])
+    with db() as c: return fetch(c,'SELECT t.*,e.name AS employee_name FROM tickets t JOIN employees e ON e.id=t.employee_id'+clause+' ORDER BY t.id DESC',args)
+
+@app.post('/api/helpdesk/tickets',status_code=201)
+def create_ticket(body:TicketIn,user=Depends(current_user)):
+    with db() as c:
+        r=c.execute('INSERT INTO tickets(employee_id,subject,category,description,priority,created_at) VALUES(?,?,?,?,?,?)',(user['id'],body.subject,body.category,body.description,body.priority,now()))
+        audit(c,user['id'],'ticket.created',f'ticket:{r.lastrowid}')
+        return {'id':r.lastrowid}
+
+@app.patch('/api/helpdesk/tickets/{ticket_id}')
+def update_ticket(ticket_id:int,body:TicketState,user=Depends(require_hr)):
+    with db() as c:
+        record(c,'tickets',ticket_id)
+        c.execute('UPDATE tickets SET status=? WHERE id=?',(body.status,ticket_id))
+        inform(c,record(c,'tickets',ticket_id)['employee_id'],'HR support ticket updated',f'Your support request status is now {body.status}.')
+        audit(c,user['id'],'ticket.updated',f'ticket:{ticket_id}',body.status)
+        return {'status':body.status}
+
+@app.get('/api/assets')
+def get_assets(user=Depends(current_user)):
+    clause,args=('',[]) if user['role']=='admin' else (' WHERE a.employee_id=?',[user['id']])
+    with db() as c: return fetch(c,'SELECT a.*,e.name AS employee_name FROM assets a JOIN employees e ON e.id=a.employee_id'+clause+' ORDER BY a.id DESC',args)
+
+@app.post('/api/assets',status_code=201)
+def create_asset(body:AssetIn,user=Depends(require_hr)):
+    with db() as c:
+        needs(c.execute('SELECT 1 FROM employees WHERE id=?',(body.employee_id,)).fetchone() is not None,'Employee not found',422)
+        try: r=c.execute('INSERT INTO assets(employee_id,asset_name,serial_number,assigned_at) VALUES(?,?,?,?)',(body.employee_id,body.asset_name,body.serial_number,date.today().isoformat()))
+        except sqlite3.IntegrityError: raise HTTPException(409,'Asset serial already exists')
+        audit(c,user['id'],'asset.assigned',f'asset:{r.lastrowid}')
+        return {'id':r.lastrowid}
+
+@app.get('/api/documents')
+def get_documents(user=Depends(current_user)):
+    clause,args=('',[]) if user['role']=='admin' else (' WHERE d.employee_id=?',[user['id']])
+    with db() as c: return fetch(c,'SELECT d.*,e.name AS employee_name FROM documents d JOIN employees e ON e.id=d.employee_id'+clause+' ORDER BY d.id DESC',args)
+
+@app.post('/api/documents',status_code=201)
+def add_document_metadata(body:DocumentIn,user=Depends(require_hr)):
+    with db() as c:
+        needs(c.execute('SELECT 1 FROM employees WHERE id=?',(body.employee_id,)).fetchone() is not None,'Employee not found',422)
+        r=c.execute('INSERT INTO documents(employee_id,title,document_type,created_at) VALUES(?,?,?,?)',(body.employee_id,body.title,body.document_type,now()))
+        audit(c,user['id'],'document.registered',f'document:{r.lastrowid}')
+        return {'id':r.lastrowid,'note':'Document metadata only; no file uploaded'}
+
+@app.get('/api/offboarding')
+def get_offboarding(user=Depends(current_user)):
+    clause,args=('',[]) if user['role']=='admin' else (' WHERE o.employee_id=?',[user['id']])
+    with db() as c: return fetch(c,'SELECT o.*,e.name AS employee_name FROM offboarding o JOIN employees e ON e.id=o.employee_id'+clause+' ORDER BY o.id DESC',args)
+
+@app.post('/api/offboarding',status_code=201)
+def request_offboarding(body:OffboardIn,user=Depends(current_user)):
+    needs(body.last_working_day>=date.today(),'Last working day cannot be in the past',422)
+    with db() as c:
+        needs(c.execute("SELECT 1 FROM offboarding WHERE employee_id=? AND status NOT IN ('Closed')",(user['id'],)).fetchone() is None,'You already have an active request',409)
+        r=c.execute('INSERT INTO offboarding(employee_id,last_working_day,reason,created_at) VALUES(?,?,?,?)',(user['id'],str(body.last_working_day),body.reason,now()))
+        audit(c,user['id'],'offboarding.requested',f'offboarding:{r.lastrowid}')
+        return {'id':r.lastrowid}
+
+@app.patch('/api/offboarding/{item_id}')
+def offboarding_state(item_id:int,body:OffboardState,user=Depends(require_hr)):
+    with db() as c:
+        current=record(c,'offboarding',item_id)
+        transitions={'Requested':('Under Review',), 'Under Review':('Approved',), 'Approved':('Closed',), 'Closed':()}
+        needs(body.status in transitions.get(current['status'],()),'Invalid offboarding status transition',409)
+        if body.status=='Closed':
+            steps=c.execute('SELECT status FROM offboarding_clearance WHERE offboarding_id=?',(item_id,)).fetchall()
+            needs(bool(steps) and all(s['status']=='Completed' for s in steps),
+                  'Complete all clearance steps before closing the exit',409)
+        c.execute('UPDATE offboarding SET status=? WHERE id=?',(body.status,item_id))
+        inform(c,record(c,'offboarding',item_id)['employee_id'],'Offboarding request updated',f'Your request status is now {body.status}.')
+        audit(c,user['id'],'offboarding.updated',f'offboarding:{item_id}',body.status)
+        return {'status':body.status}
+
+@app.get('/api/expenses')
+def get_expenses(user=Depends(current_user)):
+    clause,args=('',[]) if user['role']=='admin' else (' WHERE x.employee_id=?',[user['id']])
+    with db() as c: return fetch(c,'''SELECT x.*,e.name AS employee_name,
+        d.expense_date,d.merchant,d.business_purpose,d.cost_center,d.receipt_reference,
+        COALESCE(r.status,'Not recorded') AS reimbursement_status
+        FROM expenses x JOIN employees e ON e.id=x.employee_id
+        LEFT JOIN expense_claim_details d ON d.expense_id=x.id
+        LEFT JOIN expense_reimbursement_records r ON r.expense_id=x.id'''+clause+' ORDER BY x.id DESC',args)
+
+@app.post('/api/expenses',status_code=201)
+def create_expense(body:ExpenseIn,user=Depends(current_user)):
+    from expense_management import create_expense_record
+    with db() as c:
+        return create_expense_record(c,user,body)
+
+@app.patch('/api/expenses/{item_id}')
+def expense_decide(item_id:int,body:ExpenseState,user=Depends(require_hr)):
+    # Compatibility route shares the exact auditable review and notification contract.
+    from compensation_ops import review_expense, ExpenseReviewIn
+    return review_expense(item_id,ExpenseReviewIn(decision=body.status,reason=body.reason),user)
+
+@app.get('/api/notifications')
+def get_notifications(user=Depends(current_user)):
+    with db() as c: return fetch(c,'SELECT * FROM notifications WHERE employee_id=? AND id NOT IN (SELECT notification_id FROM archived_notifications WHERE employee_id=?) ORDER BY id DESC LIMIT 50',(user['id'],user['id']))
+
+@app.patch('/api/notifications/{notification_id}/read')
+def read_notification(notification_id:int,user=Depends(current_user)):
+    with db() as c:
+        item=record(c,'notifications',notification_id)
+        needs(item['employee_id']==user['id'])
+        c.execute('UPDATE notifications SET is_read=1 WHERE id=?',(notification_id,))
+        return {'status':'read'}
+
+@app.get('/api/reports/overview')
+def overview(user=Depends(require_manager)):
+    with db() as c:
+        if user['role']=='admin':
+            depts=fetch(c,'SELECT department AS name,COUNT(*) AS value FROM employees GROUP BY department ORDER BY value DESC')
+            stats={'employees':c.execute('SELECT COUNT(*) FROM employees').fetchone()[0], 'pending_leave':c.execute("SELECT COUNT(*) FROM leave_requests WHERE status='Pending'").fetchone()[0], 'open_tickets':c.execute("SELECT COUNT(*) FROM tickets WHERE status IN ('Open','In Progress')").fetchone()[0], 'active_jobs':c.execute("SELECT COUNT(*) FROM jobs WHERE status='Open'").fetchone()[0], 'learning_enrollments':c.execute('SELECT COUNT(*) FROM enrollments').fetchone()[0]}
+        else:
+            depts=fetch(c,'SELECT department AS name,COUNT(*) AS value FROM employees WHERE manager_id=? OR id=? GROUP BY department ORDER BY value DESC',(user['id'],user['id']))
+            stats={'employees':sum(r['value'] for r in depts),'pending_leave':c.execute("SELECT COUNT(*) FROM leave_requests l JOIN employees e ON e.id=l.employee_id WHERE e.manager_id=? AND l.status='Pending'",(user['id'],)).fetchone()[0], 'open_tickets':0, 'active_jobs':c.execute("SELECT COUNT(*) FROM jobs WHERE status='Open'").fetchone()[0], 'learning_enrollments':c.execute('SELECT COUNT(*) FROM enrollments WHERE employee_id=?',(user['id'],)).fetchone()[0]}
+        return {'stats':stats,'departments':depts,'scope':user['role']}
+
+@app.get('/api/reports/departments.csv')
+def department_report(user=Depends(require_manager)):
+    with db() as c:
+        if user['role']=='admin': data=fetch(c,'SELECT department,COUNT(*) AS employees FROM employees GROUP BY department ORDER BY department')
+        else: data=fetch(c,'SELECT department,COUNT(*) AS employees FROM employees WHERE id=? OR manager_id=? GROUP BY department ORDER BY department',(user['id'],user['id']))
+    out=io.StringIO(); writer=csv.writer(out);writer.writerow(['Department','Employee Count'])
+    for item in data: writer.writerow([item['department'],item['employees']])
+    return StreamingResponse(iter([out.getvalue()]),media_type='text/csv',headers={'Content-Disposition':'attachment; filename="sass-department-summary.csv"'})
+
+class PolicyIn(BaseModel):
+    title: str=Field(min_length=3,max_length=160)
+    category: str=Field(min_length=2,max_length=80)
+    content: str=Field(min_length=10,max_length=7000)
+
+@app.post('/api/policies',status_code=201)
+def add_policy(body:PolicyIn,user=Depends(require_hr)):
+    with db() as c:
+        cur=c.execute('INSERT INTO policies(title,category,content,last_updated) VALUES(?,?,?,?)',(body.title,body.category,body.content,date.today().isoformat()))
+        audit(c,user['id'],'policy.created',f'policy:{cur.lastrowid}')
+        return {'id':cur.lastrowid}
+
+@app.patch('/api/policies/{policy_id}')
+def edit_policy(policy_id:int,body:PolicyIn,user=Depends(require_hr)):
+    with db() as c:
+        record(c,'policies',policy_id)
+        c.execute('UPDATE policies SET title=?,category=?,content=?,last_updated=?,revision=revision+1 WHERE id=?',(body.title,body.category,body.content,date.today().isoformat(),policy_id))
+        audit(c,user['id'],'policy.updated',f'policy:{policy_id}')
+        return {'status':'updated'}
+
+class PayrollIn(BaseModel):
+    employee_id: int
+    month: str=Field(pattern=r'^20\d\d-(0[1-9]|1[0-2])$')
+    gross: float=Field(ge=0,le=100000000)
+    deductions: float=Field(ge=0,le=100000000)
+
+@app.post('/api/payroll',status_code=410)
+def retired_legacy_payslip(body:PayrollIn,user=Depends(require_hr)):
+    raise HTTPException(410,'The legacy manual payslip entry API is retired. Use the payroll workbench.')
+
