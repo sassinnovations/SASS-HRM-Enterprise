@@ -14,7 +14,14 @@ assert "'backend_version':app.version" in setup
 assert "const FRONTEND_RELEASE='4.8.0'" in admin
 assert "summary?.database_engine==='mysql'" in admin and "summary?.backend_version===FRONTEND_RELEASE" in admin
 assert "disabled={busy||!safeConnection}" in admin
-assert "disabled={busy||!safeConnection||!validation?.can_import}" in admin
+# Employee import now uses the dedicated DataQualityImporter, not the old
+# company-profile form. Check the actual preview/commit gates in the new flow.
+importer=(ROOT/'web/src/DataQualityImporter.tsx').read_text(encoding='utf-8')
+assert '{safeConnection&&<DataQualityImporter' in admin
+assert "if(!file||!preview?.preview_token||preview.error_count||confirm!=='IMPORT')" in importer
+assert "'x-import-preview-token':preview.preview_token" in importer
+import_api=(ROOT/'server/data_quality_import.py').read_text(encoding='utf-8')
+assert 'async def commit_import(request: Request,user=Depends(require_hr))' in import_api
 assert '$expectedVersion=(Get-Content' in verification
 assert '$api.version -ne $expectedVersion' in verification
 assert (ROOT/'DIAGNOSE_CONNECTION.bat').exists()

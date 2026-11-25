@@ -1,3 +1,27 @@
+## Full checked White and Blue release
+
+Start with [the release and update guide](FULL_RELEASE_NOTES.md) for the borderless signup, first-admin launcher, and safe upgrade steps.
+
+---
+
+## Workspace workflow upgrades
+
+See the [workspace controls and upgrade guide](WORKSPACE_WORKFLOWS_RELEASE_NOTES.md). Migration 29 adds two account-owned view preference tables.
+
+---
+
+## Persistent workspace settings release
+
+See the [database links, update steps and testing guide](WORKSPACE_PERSISTENT_SETTINGS_RELEASE_NOTES.md). Migration 28 adds six workspace tables.
+
+---
+
+## Workspace manual controls release
+
+See the [workspace upgrade and safe installation guide](WORKSPACE_MANUAL_CONTROLS_RELEASE_NOTES.md). The eight new MySQL tables are additive.
+
+---
+
 ## Service Center Plus release
 
 See [what changed, how it was tested, and staging instructions](SERVICE_CENTER_PLUS_RELEASE_NOTES.md).
@@ -263,7 +287,7 @@ Added a separate administrator-only **Compensation settings** page (`/compensati
 **Upgrade note (v2.3):** See `docs/V2_3_CONNECTION_DIAGNOSTICS.md`. If the dashboard shows SQLite, run `DIAGNOSE_CONNECTION.bat`; the backend you are viewing may be an older test instance. Updated Company setup blocks MySQL-unverified profile saves and employee import, exposes the backend release version, and links to unfinished setup sections. No existing MySQL records are removed. Use original `.env` files and Docker database volume when upgrading.
 
 
-**Recommended local launch:** After installing Docker Desktop and configuring a fresh instance with `SETUP_SASS_HRM.bat`, run **`START_DOCKER_FULL.bat`** to launch the MySQL, FastAPI, and built React frontend containers together. On a new empty MySQL database only, create your first administrator using `CREATE_ADMIN.bat` (local Python needed). Open **http://localhost:5173**. Run **`VERIFY_DOCKER_FULL.bat`** for health/proxy/schema checks, **`BACKUP_MYSQL.bat`** for a binary-safe backup, and **`VERIFY_EVERYTHING.bat`** for isolated API tests and a real frontend build.
+**Recommended local launch:** After installing Docker Desktop and configuring a fresh instance with `SETUP_SASS_HRM.bat`, run **`START_DOCKER_FULL.bat`** to launch the MySQL, FastAPI, and built React frontend containers together. On a new empty MySQL database only, create your first administrator using `CREATE_ADMIN.bat` (uses the running Docker API container; no Windows Python needed). Open **http://localhost:5173**. Run **`VERIFY_DOCKER_FULL.bat`** for health/proxy/schema checks, **`BACKUP_MYSQL.bat`** for a binary-safe backup, and **`VERIFY_EVERYTHING.bat`** for isolated API tests and a real frontend build.
 
 **Existing deployments:** Keep the same persistent Docker volume and previously generated `.env` and `server/.env`; never rerun first-time setup, never reset passwords, and never use `docker compose down -v`. Back up and test restoration before making changes. The v2.4.0 distribution contains no `.env` files, secrets, databases or bundled `node_modules` (older v2.3.0 ZIP copies may contain exposed secrets).
 
@@ -326,9 +350,9 @@ A SASS-branded HRMS/HRIS application with **empty, organization-owned MySQL data
 Requirements: Python 3.11+, Node.js 20+, Docker Desktop with MySQL 8.4 image access. Extract to a new directory; do **not** overwrite your previous project or MySQL volume.
 
 1. Run **`SETUP_SASS_HRM.bat`**. It creates separate, cryptographically random database credentials and JWT signing key in ignored local `.env` files. It refuses to overwrite existing configuration.
-2. Run **`START_MYSQL.bat`** and wait for MySQL health check. The Compose project is named `sass_hrm_real` to avoid silently altering the old v1.0 database volume.
-3. Run **`CREATE_ADMIN.bat`**. The SASS work email is preset; supply your own administrator display name, employee code, location and a new secure password. The command works **only if the employee table is empty**. No default admin exists.
-4. Run **`START_HERE.bat`** and open `http://localhost:5173` after both windows are ready. Sign in with the real administrator credentials you created.
+2. Run **`START_DOCKER_FULL.bat`** and wait for the API and MySQL to be ready.
+3. Run **`CREATE_ADMIN.bat`**. Enter your work email, display name, employee code, and office location, then choose your own password at the hidden prompt. It works **only if the employee table is empty**. No default admin exists.
+4. Open `http://localhost:5173` and sign in with the administrator account you created.
 5. In Organization, create departments, holidays and announcements. In Leave Management, add the organization's leave categories and approved entitlements. In Policies, add approved handbook documents. In Employee HRIS, create employee profiles.
 6. Before sending invitations, edit `server/.env` and supply `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`. The invitations API uses TLS SMTP and **never sends an activation token to the browser**. Then use Account Provisioning to email invitation tokens to your staff.
 
@@ -383,10 +407,9 @@ The read-only AI assistant does not autonomously approve hiring, payroll or term
 **Not yet verified here:** actual MySQL 8.4 Docker startup, full `npm run build`, browser interactions, actual SMTP provider delivery, or production compliance/security. Use the supplied scripts on Windows before any real operational rollout.
 
 
-## SASS administrator + developer setup (v1.2)
+## SASS administrator and developer diagnostics
 
-Use `SETUP_SASS_HRM.bat`, then `START_MYSQL.bat`, then `CREATE_ADMIN.bat`, then `START_HERE.bat`.
-`CREATE_ADMIN.bat` provisions **one identity** for `satyanath.yalamanchili@sassinnovations.com` with the existing **HR administrator** role and a **separate, read-only developer diagnostics grant**. It asks for the administrator's display name, employee code, office location and a NEW password using a terminal prompt; it never includes a password in a ZIP, script, configuration template, or source file. The password must be at least 12 characters, with letters and digits.
+For a new empty database, start the full Docker stack before running `CREATE_ADMIN.bat`. It creates one HR administrator with the email supplied at the prompt. It does not grant developer diagnostics. See [administrator setup](docs/ADMIN_DEVELOPER_SETUP.md).
 
 The Developer console is shown only for users with a database-backed developer grant, and the server independently checks the grant on every diagnostics request. An ordinary employee or manager receives HTTP 403 even when manually calling the API. This grant does **not** provide a second shared login or unreviewed privilege escalation.
 

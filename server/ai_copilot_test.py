@@ -4,6 +4,7 @@ No live MySQL, public LLM provider or production HR records are contacted.
 """
 from __future__ import annotations
 
+import json
 import os
 import sys
 import tempfile
@@ -238,6 +239,15 @@ with tempfile.TemporaryDirectory() as tmp:
         created = post('/ai/copilot/actions/'+pcal.json()['proposal_id']+'/confirm', {'confirm':'CONFIRM'}, a)
         assert created.status_code == 200, created.text
         eid = created.json()['result']['id']
+        category = post('/calendar/categories', {'name': 'Private calendar category'}, a)
+        assert category.status_code == 201, category.text
+        category_id = category.json()['id']
+        assignment = client.patch(f'/api/calendar/personal/{eid}', headers=a, json={**cal, 'category_id':category_id})
+        assert assignment.status_code == 200, assignment.text
+        for op, params in [('create_personal_event', cal), ('edit_personal_event', {**cal, 'event_id':eid})]:
+            category_change = post('/ai/copilot/actions/prepare', {'operation':op, 'parameters':{**params,'category_id':category_id}}, a)
+            assert category_change.status_code == 422, category_change.text
+            assert category_change.json()['detail']=='Manage event categories in My calendar.'
         assert any(x['id']==eid for x in get('/ai/copilot/actions/my-options', a).json()['personal_events'])
         assert not any(x['id']==eid for x in get('/ai/copilot/actions/my-options', b).json()['personal_events'])
         bad_edit = post('/ai/copilot/actions/prepare', {'operation':'edit_personal_event','parameters':{**cal,'event_id':eid,'title':'Intruder'}}, b)
@@ -248,7 +258,22 @@ with tempfile.TemporaryDirectory() as tmp:
         stale = post('/ai/copilot/actions/prepare', {'operation':'delete_personal_event','parameters':{'event_id':eid}}, a).json()['proposal_id']
         edit = post('/ai/copilot/actions/prepare', {'operation':'edit_personal_event','parameters':{**cal,'event_id':eid,'title':'My updated event'}}, a)
         assert edit.status_code == 201, edit.text
-        assert post('/ai/copilot/actions/'+edit.json()['proposal_id']+'/confirm', {'confirm':'CONFIRM'}, a).status_code == 200
+        edit_id = edit.json()['proposal_id']
+        with main.db() as conn:
+            args = json.loads(conn.execute('SELECT args_json FROM ai_action_proposals WHERE id=?',(edit_id,)).fetchone()[0])
+            assert 'category_id' not in args
+            # Simulate pre-upgrade serialization of an unset optional category.
+            conn.execute('UPDATE ai_action_proposals SET args_json=? WHERE id=?',(json.dumps({**args,'category_id':None}),edit_id))
+        assert post('/ai/copilot/actions/'+edit_id+'/confirm', {'confirm':'CONFIRM'}, a).status_code == 200
+        assert get('/calendar/personal', a).json()[0]['category_id']==category_id
+        blocked = post('/ai/copilot/actions/prepare', {'operation':'edit_personal_event','parameters':{**cal,'event_id':eid,'title':'Unsafe proposal title'}}, a)
+        assert blocked.status_code == 201, blocked.text
+        blocked_id = blocked.json()['proposal_id']
+        with main.db() as conn:
+            args = json.loads(conn.execute('SELECT args_json FROM ai_action_proposals WHERE id=?',(blocked_id,)).fetchone()[0])
+            conn.execute('UPDATE ai_action_proposals SET args_json=? WHERE id=?',(json.dumps({**args,'category_id':category_id}),blocked_id))
+        assert post('/ai/copilot/actions/'+blocked_id+'/confirm', {'confirm':'CONFIRM'}, a).status_code==422
+        assert get('/calendar/personal', a).json()[0]['category_id']==category_id
         assert post('/ai/copilot/actions/'+stale+'/confirm', {'confirm':'CONFIRM'}, a).status_code == 409
         with main.db() as conn:
             assert conn.execute('SELECT title FROM personal_calendar_events WHERE id=?',(eid,)).fetchone()['title']=='My updated event'

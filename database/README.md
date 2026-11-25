@@ -1,3 +1,21 @@
+## Workspace views: 288-table schema
+
+See the [workspace controls and upgrade guide](../WORKSPACE_WORKFLOWS_RELEASE_NOTES.md). Migration 29 adds two account-owned view preference tables.
+
+---
+
+## Persistent workspace settings: 286-table schema
+
+See the [database links, update steps and testing guide](../WORKSPACE_PERSISTENT_SETTINGS_RELEASE_NOTES.md). Migration 28 adds six workspace tables.
+
+---
+
+## Workspace manual controls: 280-table schema
+
+See the [workspace upgrade and safe installation guide](../WORKSPACE_MANUAL_CONTROLS_RELEASE_NOTES.md). The eight new MySQL tables are additive.
+
+---
+
 # Current database release: 263 tables (18 November 2026) — SASS INNOVATIONS ENTERPRISE
 
 **Migration 21** (`21_RECRUITMENT_HR_OPERATIONS_ADD_ONLY.sql`) adds **20 linked,

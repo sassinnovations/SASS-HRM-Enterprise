@@ -497,9 +497,12 @@ def _insert_jd_chunk(conn, chunk):
 
 def _preview_jd_file(filename: str, source: BinaryIO, sha: str):
     with tempfile.TemporaryDirectory(prefix='sass-jd-scan-') as folder:
-        with sqlite3.connect(str(__import__('pathlib').Path(folder)/'dedup.sqlite')) as scratch:
+        scratch = sqlite3.connect(str(__import__('pathlib').Path(folder)/'dedup.sqlite'))
+        try:
             with db() as conn:
                 result=_scan_jds(conn,filename,source,scratch,'skip',opening_ids=True)
+        finally:
+            scratch.close()
     return {'filename':filename,'sha256':sha,
             'total_rows':result['valid']+result['invalid'],
             'valid_rows':result['valid'],'invalid_rows':result['invalid'],
@@ -520,7 +523,8 @@ async def preview_jd_import(request: Request, user=Depends(require_hr)):
 def _commit_jd_file(filename: str, source: BinaryIO, sha: str, duplicate_mode: str,
                     invalid_mode: str, actor_id: int):
     with tempfile.TemporaryDirectory(prefix='sass-jd-import-') as folder:
-        with sqlite3.connect(str(__import__('pathlib').Path(folder)/'dedup.sqlite')) as scratch:
+        scratch = sqlite3.connect(str(__import__('pathlib').Path(folder)/'dedup.sqlite'))
+        try:
             with db() as conn:
                 preflight=_scan_jds(conn,filename,source,scratch,duplicate_mode,opening_ids=True)
                 if preflight['invalid'] and invalid_mode=='reject':
@@ -556,6 +560,8 @@ def _commit_jd_file(filename: str, source: BinaryIO, sha: str, duplicate_mode: s
                 result={'batch_id':batch.lastrowid,'imported':insert_count,
                         'skipped':preflight['duplicates']+preflight['invalid'],
                         'invalid_skipped':preflight['invalid'],'rows':preflight['valid']+preflight['invalid']}
+        finally:
+            scratch.close()
     return result
 
 

@@ -3655,3 +3655,160 @@ CREATE TABLE IF NOT EXISTS hrm_work_catalog_settings (
     categories_json TEXT NOT NULL,
     CONSTRAINT ck_hrm_work_catalog_settings_kind CHECK (kind IN ('products','projects'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Employee-owned drafts and request history preferences. Additive; no workflow rows altered.
+CREATE TABLE IF NOT EXISTS self_service_preferences (
+  employee_id BIGINT NOT NULL PRIMARY KEY,
+  default_kind VARCHAR(32) NOT NULL,
+  default_status VARCHAR(16) NOT NULL,
+  page_size INT NOT NULL,
+  FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS self_service_drafts (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  employee_id BIGINT NOT NULL,
+  kind VARCHAR(32) NOT NULL,
+  title VARCHAR(150) NOT NULL,
+  notes TEXT NOT NULL,
+  created_at VARCHAR(48) NOT NULL,
+  updated_at VARCHAR(48) NOT NULL,
+  KEY idx_self_service_drafts_owner(employee_id,updated_at,id),
+  FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Private calendar preferences and personal inbox reminders.
+CREATE TABLE IF NOT EXISTS employee_calendar_preferences (
+ employee_id BIGINT NOT NULL PRIMARY KEY,
+ week_start VARCHAR(9) NOT NULL DEFAULT 'monday',
+ visibility VARCHAR(12) NOT NULL DEFAULT 'all',
+ default_start_time VARCHAR(5) NOT NULL DEFAULT '',
+ include_private_export TINYINT(1) NOT NULL DEFAULT 0,
+ CONSTRAINT fk_calendar_preferences_employee FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS employee_inbox_reminders (
+ id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ employee_id BIGINT NOT NULL,
+ title VARCHAR(120) NOT NULL,
+ body VARCHAR(1200) NOT NULL,
+ due_date VARCHAR(10) NULL,
+ is_done TINYINT NOT NULL DEFAULT 0,
+ created_at VARCHAR(48) NOT NULL,
+ updated_at VARCHAR(48) NOT NULL,
+ INDEX idx_inbox_reminders_employee(employee_id,id),
+ FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Personal account-security display preferences and private review checklist.
+CREATE TABLE IF NOT EXISTS employee_security_preferences (
+ employee_id BIGINT NOT NULL PRIMARY KEY,
+ history_limit INT NOT NULL DEFAULT 30,
+ display_timezone VARCHAR(12) NOT NULL DEFAULT 'local',
+ FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS employee_security_checklist (
+ id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ employee_id BIGINT NOT NULL,
+ title VARCHAR(120) NOT NULL,
+ due_on VARCHAR(10) NULL,
+ completed INT NOT NULL DEFAULT 0,
+ updated_at VARCHAR(64) NOT NULL,
+ FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE CASCADE,
+ INDEX idx_sec_checklist_employee(employee_id, completed, due_on, id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Manual coverage plans are advisory and never write leave requests.
+CREATE TABLE IF NOT EXISTS leave_coverage_warning_options (
+ id BIGINT NOT NULL PRIMARY KEY,
+ weekdays_only TINYINT NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS leave_coverage_manual_plans (
+ id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ label VARCHAR(100) NOT NULL,
+ primary_employee_id BIGINT NOT NULL,
+ backup_employee_id BIGINT NOT NULL,
+ starts_on VARCHAR(10) NOT NULL,
+ ends_on VARCHAR(10) NOT NULL,
+ status VARCHAR(16) NOT NULL,
+ notes VARCHAR(500) NOT NULL DEFAULT '',
+ revision INT NOT NULL DEFAULT 1,
+ deleted_at VARCHAR(48),
+ KEY ix_leave_coverage_plans_window (deleted_at,starts_on,ends_on),
+ FOREIGN KEY(primary_employee_id) REFERENCES employees(id),
+ FOREIGN KEY(backup_employee_id) REFERENCES employees(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- Per-account display preferences for the Team leave & coverage planner.
+CREATE TABLE IF NOT EXISTS leave_coverage_personal_preferences (
+ employee_id BIGINT NOT NULL PRIMARY KEY,
+ default_department VARCHAR(191),
+ show_holidays TINYINT NOT NULL DEFAULT 1,
+ plan_status VARCHAR(16) NOT NULL DEFAULT 'All',
+ my_assignments_only TINYINT NOT NULL DEFAULT 0,
+ FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Private draft stage and pin metadata; existing drafts keep their default stage.
+CREATE TABLE IF NOT EXISTS self_service_draft_organization (
+  draft_id BIGINT NOT NULL PRIMARY KEY,
+  stage VARCHAR(16) NOT NULL CHECK(stage IN ('drafting','ready')),
+  pinned TINYINT NOT NULL CHECK(pinned IN (0,1)),
+  updated_at VARCHAR(48) NOT NULL,
+  FOREIGN KEY(draft_id) REFERENCES self_service_drafts(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Owner-only initial filters, order and page size for the notification inbox.
+CREATE TABLE IF NOT EXISTS employee_inbox_display_defaults (
+ employee_id BIGINT NOT NULL PRIMARY KEY,
+ notification_order VARCHAR(8) NOT NULL DEFAULT 'newest',
+ notification_page_size INT NOT NULL DEFAULT 25,
+ reminder_view VARCHAR(12) NOT NULL DEFAULT 'open',
+ FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Account-owned event categories. Deleting a category removes only assignments.
+CREATE TABLE IF NOT EXISTS employee_calendar_categories (
+ id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ employee_id BIGINT NOT NULL,
+ name VARCHAR(48) NOT NULL,
+ name_key VARCHAR(160) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+ color VARCHAR(12) NOT NULL DEFAULT 'blue',
+ UNIQUE KEY uq_employee_calendar_category_name(employee_id,name_key),
+ CONSTRAINT fk_calendar_category_employee FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS personal_calendar_event_categories (
+ event_id BIGINT NOT NULL PRIMARY KEY,
+ category_id BIGINT NOT NULL,
+ INDEX idx_calendar_category_events(category_id),
+ CONSTRAINT fk_calendar_tag_event FOREIGN KEY(event_id) REFERENCES personal_calendar_events(id) ON DELETE CASCADE,
+ CONSTRAINT fk_calendar_tag_category FOREIGN KEY(category_id) REFERENCES employee_calendar_categories(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Personal Security checklist settings; no device, credential, or audit data.
+CREATE TABLE IF NOT EXISTS employee_security_checklist_settings (
+ employee_id BIGINT NOT NULL PRIMARY KEY,
+ status_filter VARCHAR(12) NOT NULL DEFAULT 'all',
+ sort_order VARCHAR(12) NOT NULL DEFAULT 'due',
+ default_due VARCHAR(12) NOT NULL DEFAULT 'none',
+ FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Personal default draft view; independent of submitted history preferences.
+CREATE TABLE IF NOT EXISTS self_service_draft_views (
+  employee_id BIGINT NOT NULL PRIMARY KEY,
+  module_filter VARCHAR(32) NOT NULL,
+  draft_view VARCHAR(16) NOT NULL CHECK(draft_view IN ('all','drafting','ready','pinned')),
+  sort_order VARCHAR(16) NOT NULL CHECK(sort_order IN ('newest','oldest','title')),
+  FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Employee-owned default calendar layout and agenda range.
+CREATE TABLE IF NOT EXISTS employee_calendar_agenda_preferences (
+ employee_id BIGINT NOT NULL PRIMARY KEY,
+ preferred_view VARCHAR(12) NOT NULL DEFAULT 'month',
+ agenda_days INTEGER NOT NULL DEFAULT 14,
+ CONSTRAINT fk_calendar_agenda_preferences_employee FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

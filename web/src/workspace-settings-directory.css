@@ -1,0 +1,13 @@
+.ws-settings-directory{padding:clamp(16px,2vw,26px);margin:0 0 18px}
+.ws-settings-directory h2{font-size:1.22rem;margin:.35rem 0;color:var(--sass-text,#18243b)}
+.ws-settings-directory header p{margin:0;color:var(--sass-muted,#516078)}
+.ws-settings-directory-grid{list-style:none;padding:0;margin:16px 0 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:10px}
+.ws-settings-directory-grid li{min-width:0}
+.ws-settings-directory-link{height:100%;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px;padding:13px;border:1px solid var(--sass-border,#e0e6ef);border-radius:12px;color:inherit;text-decoration:none;background:var(--sass-surface,#fff)}
+.ws-settings-directory-link:hover{border-color:var(--sass-primary,#4653d4);background:var(--sass-surface-soft,#f7f8fc)}
+.ws-settings-directory-link:focus-visible{outline:2px solid var(--sass-focus,#4653d4);outline-offset:2px}
+.ws-settings-directory-icon{display:grid;place-items:center;width:36px;height:36px;border-radius:10px;background:var(--sass-primary-soft,#edf1ff);color:var(--sass-primary,#4653d4)}
+.ws-settings-directory-copy{display:grid;gap:4px}
+.ws-settings-directory-copy strong{font-size:.94rem;color:var(--sass-text,#18243b)}
+.ws-settings-directory-copy span{font-size:.84rem;color:var(--sass-muted,#516078);line-height:1.35}
+.ws-settings-directory-arrow{color:var(--sass-primary,#4653d4)}

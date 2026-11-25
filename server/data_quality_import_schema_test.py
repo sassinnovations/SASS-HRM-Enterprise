@@ -5,8 +5,8 @@ from mysql_backend import split_ddl
 from mysql_feature_schema_integrity import check_file_package,sql_objects,QUALITY_IMPORT_ADD_ONLY,SCHEMA
 
 required,indexes,relations=check_file_package()
-assert len(required)==272 and sum(map(len,required.values()))==2242
-assert len(indexes)==331 and len(relations)==505
+assert len(required)==288 and sum(map(len,required.values()))==2318
+assert len(indexes)==337 and len(relations)==522
 sql=QUALITY_IMPORT_ADD_ONLY.read_text()
 tables,add_indexes,add_relations,order=sql_objects(sql)
 assert order==['hr_data_quality_import_settings','hr_data_quality_import_history']

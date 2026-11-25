@@ -19,7 +19,7 @@ Local MySQL Workbench access remains `127.0.0.1:3307`, using credentials generat
 1. Install and start Docker Desktop (Linux containers). Stop any old SASS HRM Vite or Python processes occupying ports `5173`, `8000`, or MySQL port `3307`.
 2. Run `SETUP_SASS_HRM.bat` **only when setting up a new database**. It generates matching configuration and random secrets in `.env` and `server/.env`; these are excluded from the ZIP.
 3. Run `START_DOCKER_FULL.bat`. It verifies configuration, builds both images, starts services, and checks the API and reverse proxy. The first build requires access to npm and PyPI.
-4. On a new and completely empty database only, run `CREATE_ADMIN.bat` (requires local Python and access to port 3307). The administrator enters their own password through a local hidden prompt. Do not rerun on an existing organization database.
+4. On a new and completely empty database only, run `CREATE_ADMIN.bat` (uses the running Docker API container and its MySQL connection). The administrator enters their own password through a local hidden prompt. Do not rerun on an existing organization database.
 5. Open `http://localhost:5173`. Run `VERIFY_DOCKER_FULL.bat` and `VERIFY_EVERYTHING.bat` for infrastructure/API and isolated backend/frontend tests respectively.
 
 **Existing installation:** Back up first (`BACKUP_MYSQL.bat`). Keep the original matching `.env`, `server/.env`, and MySQL Docker volume. Never run the first-time setup or reset generated database secrets against a populated volume. Restore backups only into a separate test database after review.

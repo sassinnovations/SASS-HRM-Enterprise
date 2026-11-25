@@ -43,7 +43,7 @@ class FakeConnection:
         return FakeCursor(self)
 
 required = get_required_schema()
-assert len(required) == 272
+assert len(required) == 288
 existing = set(required) - {'profile_photos', 'performance_evidence'}
 columns = {(t, c) for t in existing for c in required[t]} - {('employees','work_email')}
 conn = FakeConnection(existing, columns)

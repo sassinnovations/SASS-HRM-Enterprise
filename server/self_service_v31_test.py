@@ -56,4 +56,123 @@ with tempfile.TemporaryDirectory(prefix='sass-requests-test-') as d:
         assert client.get('/api/self-service/shortcuts',headers=first).json()['pages']==['calendar','selfservice']
         with db() as c:
             assert c.execute("SELECT COUNT(*) AS n FROM audit_events WHERE action='workspace.shortcuts.updated'").fetchone()['n']==1
-    print('PASS v3.1: owner-scope, pagination, search, filtering, secure CSV, JWT and persistent shortcuts')
+        # Preferences are private; clearing them never touches shortcuts.
+        defaults={'default_kind':'all','default_status':'all','page_size':20}
+        custom={'default_kind':'leave','default_status':'active','page_size':10}
+        assert client.get('/api/self-service/settings').status_code==401
+        assert client.get('/api/self-service/settings',headers=first).json()==defaults
+        assert client.put('/api/self-service/settings',headers=first,json=custom).json()==custom
+        assert client.get('/api/self-service/settings',headers=first).json()==custom
+        assert client.get('/api/self-service/settings',headers=admin).json()==defaults
+        assert client.put('/api/self-service/settings',headers=first,json={**custom,'page_size':40}).status_code==422
+        assert client.put('/api/self-service/settings',headers=first,json={**custom,'default_kind':'admin'}).status_code==422
+        assert client.delete('/api/self-service/settings',headers=first).json()==defaults
+        assert client.get('/api/self-service/settings',headers=first).json()==defaults
+
+        # Draft display defaults persist per owner and are independent of history.
+        draft_view_path='/api/self-service/draft-view'
+        default_view={'module_filter':'all','draft_view':'all','sort_order':'newest'}
+        custom_view={'module_filter':'leave','draft_view':'pinned','sort_order':'title'}
+        assert client.get(draft_view_path).status_code==401
+        assert client.get(draft_view_path,headers=first).json()==default_view
+        assert client.put(draft_view_path,headers=first,json=custom_view).json()==custom_view
+        assert client.get(draft_view_path,headers=first).json()==custom_view
+        assert client.get(draft_view_path,headers=second).json()==default_view
+        assert client.get(draft_view_path,headers=admin).json()==default_view
+        for invalid in ({'sort_order':'invalid'},{'draft_view':'submitted'},{'module_filter':'tasks'},{'query':'private'}):
+            assert client.put(draft_view_path,headers=first,json=invalid).status_code==422
+        assert client.get(draft_view_path,headers=first).json()==custom_view
+        assert client.get('/api/self-service/settings',headers=first).json()==defaults
+        assert client.delete(draft_view_path,headers=first).json()==default_view
+        assert client.get(draft_view_path,headers=first).json()==default_view
+
+        # Shortcut remove and reorder share the existing, ordered save API.
+        assert client.put('/api/self-service/shortcuts',headers=first,
+                          json={'pages':['selfservice','calendar','leave']}).json()['pages']==['selfservice','calendar','leave']
+        assert client.put('/api/self-service/shortcuts',headers=first,
+                          json={'pages':['calendar','leave']}).json()['pages']==['calendar','leave']
+        assert client.get('/api/self-service/shortcuts',headers=first).json()['pages']==['calendar','leave']
+        assert client.get('/api/self-service/shortcuts',headers=second).json()['pages']==[]
+
+        # Drafts support manual CRUD but cannot change ownership or a real request.
+        path='/api/self-service/drafts'
+        payload={'kind':'leave','title':' Draft for an October request ','notes':'  Draft-only note  '}
+        assert client.post(path,json=payload).status_code==401
+        assert client.post(path,headers=first,json={**payload,'employee_id':two}).status_code==422
+        assert client.post(path,headers=first,json={**payload,'title':'   '}).status_code==422
+        assert client.post(path,headers=first,json={**payload,'kind':'offboarding'}).status_code==422
+        created=client.post(path,headers=first,json=payload)
+        assert created.status_code==201,created.text
+        item=created.json(); draft=f'{path}/{item["id"]}'
+        assert item['title']=='Draft for an October request'
+        assert item['notes']=='Draft-only note'
+        assert item['stage']=='drafting' and item['pinned'] is False
+        assert client.get(path,headers=first).json()['items']==[item]
+        assert client.get(path,headers=second).json()['items']==[]
+        assert client.get(path,headers=admin).json()['items']==[]
+        assert client.patch(draft,headers=second,json=payload).status_code==404
+        assert client.delete(draft,headers=admin).status_code==404
+        edited=client.patch(draft,headers=first,json={**payload,'kind':'helpdesk','title':'Revised helpdesk draft'})
+        assert edited.status_code==200 and edited.json()['title']=='Revised helpdesk draft',edited.text
+        assert edited.json()['created_at']==item['created_at']
+        assert edited.json()['kind']=='helpdesk'
+        # Both metadata flags survive partial changes and remain scoped to the draft owner.
+        organization=f'{draft}/organization'
+        assert client.patch(organization,json={'pinned':True}).status_code==401
+        assert client.patch(organization,headers=second,json={'pinned':True}).status_code==404
+        assert client.patch(organization,headers=admin,json={'stage':'ready'}).status_code==404
+        for invalid in ({},{'stage':None},{'stage':'submitted'},{'pinned':'yes'},{'employee_id':two,'pinned':True}):
+            assert client.patch(organization,headers=first,json=invalid).status_code==422
+        newer=client.post(path,headers=first,json={**payload,'title':'A newer draft'}).json()
+        assert client.get(path,headers=first).json()['items'][0]['id']==newer['id']
+        baseline=edited.json()
+        pinned=client.patch(organization,headers=first,json={'pinned':True}).json()
+        assert pinned['pinned'] is True and pinned['stage']=='drafting'
+        ready=client.patch(organization,headers=first,json={'stage':'ready'}).json()
+        assert ready['pinned'] is True and ready['stage']=='ready'
+        assert ready['title']==baseline['title'] and ready['updated_at']==baseline['updated_at']
+        assert [r['id'] for r in client.get(path,headers=first).json()['items']]==[item['id'],newer['id']]
+        assert client.get(path,headers=second).json()['items']==[]
+        assert client.get(path,headers=admin).json()['items']==[]
+        reset=client.patch(organization,headers=first,json={'stage':'drafting','pinned':False}).json()
+        assert reset['pinned'] is False and reset['stage']=='drafting'
+        with db() as c:
+            assert c.execute('SELECT COUNT(*) FROM self_service_draft_organization').fetchone()[0]==0
+        assert client.patch(organization,headers=first,json={'stage':'ready','pinned':True}).status_code==200
+        edited=client.patch(draft,headers=first,json={**payload,'title':'Content edit preserves organization'}).json()
+        assert edited['pinned'] is True and edited['stage']=='ready'
+        duplicate=f'{draft}/duplicate'
+        assert client.post(duplicate).status_code==401
+        assert client.post(duplicate,headers=second).status_code==404
+        assert client.post(duplicate,headers=admin).status_code==404
+        result=client.post(duplicate,headers=first)
+        assert result.status_code==201,result.text
+        copy=result.json()
+        assert copy['id']!=item['id'] and copy['title']=='Content edit preserves organization (copy)'
+        assert copy['kind']==edited['kind'] and copy['notes']==edited['notes']
+        assert copy['stage']=='drafting' and copy['pinned'] is False
+        assert client.patch(f'{path}/{copy["id"]}',headers=first,json={**payload,'title':'Independent copy edit'}).status_code==200
+        assert any(row['id']==item['id'] and row['title']==edited['title'] and row['pinned'] for row in client.get(path,headers=first).json()['items'])
+        assert client.delete(f'{path}/{copy["id"]}',headers=first).status_code==200
+        with db() as c:
+            c.executemany("""INSERT INTO self_service_drafts(employee_id,kind,title,notes,created_at,updated_at)
+                             VALUES(?,?,?,?,?,?)""",[(one,'leave','Existing spare draft','','2026-01-01','2026-01-01')]*98)
+        assert client.post(duplicate,headers=first).status_code==409
+        assert client.post(path,headers=first,json=payload).status_code==409
+        with db() as c:
+            c.execute("DELETE FROM self_service_drafts WHERE employee_id=? AND title='Existing spare draft'",(one,))
+        assert 'Draft-only note' not in client.get('/api/self-service/activity.csv',headers=first).text
+        assert client.delete(draft,headers=first).status_code==200
+        assert client.delete(draft,headers=first).status_code==404
+        assert client.patch(organization,headers=first,json={'pinned':True}).status_code==404
+        assert client.delete(f'{path}/{newer["id"]}',headers=first).status_code==200
+        with db() as c:
+            assert c.execute('SELECT COUNT(*) FROM self_service_draft_organization').fetchone()[0]==0
+        assert client.get(path,headers=first).json()['items']==[]
+        assert client.get('/api/self-service/activity',headers=first).json()==me.json()
+        with db() as c:
+            history=c.execute("SELECT action, details FROM audit_events WHERE action LIKE 'workspace.request_draft.%' ORDER BY id").fetchall()
+            action_names=[row['action'].rsplit('.',1)[-1] for row in history]
+            assert action_names==['created','updated','created','organized','organized','organized','organized','updated','duplicated','updated','deleted','deleted','deleted']
+            assert all(row['details']=='' for row in history)
+    print('PASS v3.1: owner-scope, pagination, search, filtering, secure CSV, JWT and persistent shortcuts, private draft CRUD, independent history settings, and owner-only stage/pin metadata, independent copies and saved draft views')

@@ -40,3 +40,6 @@ nav[aria-label="Recruitment workflows"] .btn.outline:disabled),
 
 /* Borderless sign-in form */
 .login-shell .login-card:not(.signup-card),.login-shell .login-panel:has(.login-card:not(.signup-card)){border:0;box-shadow:none;background:transparent}
+
+/* Borderless inner signup form. Keep the outer panel and input/role-card borders. */
+.login-shell .login-card.signup-card{border:0;box-shadow:none;background:transparent}

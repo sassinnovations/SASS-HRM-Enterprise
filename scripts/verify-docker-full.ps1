@@ -33,11 +33,11 @@ if ($LASTEXITCODE -ne 0) { throw 'ClamAV scanner not ready. Check signature down
 try {
   $api=Invoke-RestMethod -Uri 'http://127.0.0.1:8000/api/health' -TimeoutSec 15
   $proxy=Invoke-RestMethod -Uri 'http://127.0.0.1:5173/api/health' -TimeoutSec 15
-  $homeResponse=Invoke-WebRequest -Uri 'http://127.0.0.1:5173/' -UseBasicParsing -TimeoutSec 15
+  $home=Invoke-WebRequest -Uri 'http://127.0.0.1:5173/' -UseBasicParsing -TimeoutSec 15
 } catch { throw "Docker service HTTP smoke test failed: $($_.Exception.Message)" }
 if ($api.status -ne 'ok' -or $api.database -ne 'mysql' -or $api.version -ne $expectedVersion) { throw 'API must be MySQL-backed and running the packaged release version; check for a stale process on 8000.' }
 if ($proxy.status -ne 'ok' -or $proxy.database -ne 'mysql' -or $proxy.version -ne $expectedVersion) { throw 'nginx /api proxy is not reaching the current MySQL-backed FastAPI release.' }
-if ($homeResponse.StatusCode -ne 200 -or $homeResponse.Content -notmatch '<html') { throw 'Frontend HTML was not served by nginx.' }
+if ($home.StatusCode -ne 200 -or $home.Content -notmatch '<html') { throw 'Frontend HTML was not served by nginx.' }
 Write-Host 'PASS: API, nginx reverse proxy, React entry HTML, MySQL, and ClamAV scanner.' -ForegroundColor Green
 # Database schema check executes inside API network/container, avoiding the Windows Python environment.
 docker compose -f docker-compose.full.yml exec -T api python deployment_probe.py

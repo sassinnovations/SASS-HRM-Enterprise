@@ -896,8 +896,14 @@ def action_form(operation: str, parameters: dict, user: dict) -> tuple[dict, str
         return {}, 'Record my own attendance ' + ('check-in' if operation == 'check_in' else 'check-out') + ' now, using the configured company timezone.'
     if operation in ('create_personal_event', 'edit_personal_event'):
         from calendar_v27 import PersonalEventInput
-        parsed = PersonalEventInput.model_validate(parameters)
-        args = parsed.model_dump(mode='json')
+        # The route record ID is action metadata, not a private-event field.
+        event_fields = dict(parameters)
+        if operation == 'edit_personal_event':
+            event_fields.pop('event_id', None)
+        if 'category_id' in event_fields:
+            raise HTTPException(422, 'Manage event categories in My calendar.')
+        parsed = PersonalEventInput.model_validate(event_fields)
+        args = parsed.model_dump(mode='json', exclude={'category_id'})
         if operation == 'edit_personal_event':
             event_id = _positive_record_id(parameters, 'event_id')
             existing = _owned_calendar_event(user['id'], event_id)
@@ -988,6 +994,11 @@ def execute_action(operation: str, args: dict, user: dict) -> dict:
         return checkout(user=user)
     if operation in ('create_personal_event', 'edit_personal_event', 'delete_personal_event'):
         from calendar_v27 import PersonalEventInput, create_personal_event, edit_personal_event, delete_personal_event
+        # Earlier prepared actions can carry the old serializer's default null.
+        # Ignore that default, but never execute category changes outside My calendar.
+        if args.get('category_id') is not None:
+            raise HTTPException(422, 'Manage event categories in My calendar.')
+        args = {key: value for key, value in args.items() if key != 'category_id'}
         if operation == 'create_personal_event':
             return create_personal_event(PersonalEventInput.model_validate(args), user=user)
         event_id = args['event_id']
@@ -995,7 +1006,9 @@ def execute_action(operation: str, args: dict, user: dict) -> dict:
         if current['updated_at'] != args['expected_updated_at']:
             raise HTTPException(409, 'Calendar event has changed since review. Prepare again.')
         if operation == 'edit_personal_event':
-            return edit_personal_event(event_id, PersonalEventInput.model_validate(args), user=user)
+            event_fields = {key: value for key, value in args.items()
+                            if key not in ('event_id', 'expected_updated_at')}
+            return edit_personal_event(event_id, PersonalEventInput.model_validate(event_fields), user=user)
         return delete_personal_event(event_id, user=user)
     if operation == 'request_work_mode':
         from workflows_v07 import WorkModeIn, request_work_mode

@@ -13,9 +13,9 @@ from mysql_feature_schema_integrity import (
 from schema_audit import split_top_level
 
 required, named_indexes, relations = check_file_package()
-assert len(required) == 272
-assert sum(map(len, required.values())) == 2242
-assert len(named_indexes) == 331 and len(relations) == 505
+assert len(required) == 288
+assert sum(map(len, required.values())) == 2318
+assert len(named_indexes) == 337 and len(relations) == 522
 assert SCHEMA.read_bytes() == MANUAL.read_bytes()
 
 statements = split_ddl(EVIDENCE_ADD_ONLY.read_text(encoding='utf-8'))

@@ -13,6 +13,7 @@ from schema_audit import field, get_required_schema
 from mysql_feature_schema_integrity import (
     sql_objects, SCHEMA, EXTENSION_TABLES, WORKFLOW_TABLES,
     OPERATIONAL_TABLES, PLANNING_TABLES, CONTROL_TABLES, EVIDENCE_TABLES, OPERATIONS_21_TABLES,
+    WORKSPACE_MIGRATION_TABLES, WORKSPACE_SETTINGS_TABLES, WORKSPACE_VIEW_TABLES,
 )
 
 FOUNDATION_ONLY = (
@@ -27,6 +28,7 @@ CORE_MODULES = {
     'candidate_search': ('candidate_profiles', 'candidate_import_batches'),
     'recruitment': ('jobs', 'hiring_stage_settings', 'recruitment_job_descriptions', 'jd_import_batches'),
     'documents': ('document_vault',),
+    'workspace_manual_controls': WORKSPACE_MIGRATION_TABLES + WORKSPACE_SETTINGS_TABLES + WORKSPACE_VIEW_TABLES,
     'settings_and_security': ('organization_preferences', 'audit_events', 'hr_data_quality_import_settings', 'hr_data_quality_import_history'),
 }
 

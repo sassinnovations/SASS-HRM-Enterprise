@@ -15,8 +15,9 @@ groups_body=re.search(r'const menuGroups:.*?=\[(.*?)\];',app,re.S)
 assert menu_body and groups_body,'Menu or navigation groups not found'
 items=[dict(key=m.group(1),label=m.group(2),restriction=m.group(3) or '') for m in re.finditer(r"\{key:'([^']+)',label:'([^']+)',icon:[^,}\n]+(?:,only:'(admin|management)')?\}",menu_body.group(1))]
 paths=dict(re.findall(r"^\s*([a-z][a-z0-9]*):\s*'(/[^']+)'",routes,re.M))
-assert len(items)==73,(len(items),'expected exactly 73 modules')
-assert set(v['key'] for v in items)==set(paths), 'Menu does not match the route registry'
+assert len({i['key'] for i in items})==len(items), 'Repeated menu keys'
+assert set(v['key'] for v in items)|{'assistant'}==set(paths), 'Menu and floating assistant do not match the route registry'
+assert len(paths)>=76, 'A shipped route was lost'
 assert len(set(paths.values()))==len(paths), 'Repeated URLs'
 assert all(re.fullmatch(r'/[a-z]+/[a-z0-9]+(?:-[a-z0-9]+)*',url) for url in paths.values()),'Unsafe URL pattern'
 assert 'try_files $uri $uri/ /index.html' in nginx, 'Nginx direct-route reload fallback missing'
@@ -43,7 +44,8 @@ indirect={
  'career':('CultureSuite.tsx','<CultureModule'),
  'voice':('CultureSuite.tsx','<CultureModule'),
  'discipline':('CultureSuite.tsx','<CultureModule'),
- 'requestdesk':('CultureSuite.tsx','<CultureModule'),
+ 'requestdesk':('ServiceCenter.tsx','<ServiceCenter'),
+ 'helpdesk':('ServiceCenter.tsx','<ServiceCenter'),
 }
 # The extras below are intentional, and not evidence of duplicated pages.
 group_matches=re.findall(r"\{title:'([^']+)',keys:\[([^\]]+)\]\}",groups_body.group(1))
@@ -52,7 +54,7 @@ for group, keys in group_matches:
  for key in re.findall(r"'([^']+)'",keys):
   assert key not in groups, 'Feature appears in two sidebar groups: '+key
   groups[key]=group
-assert set(groups)=={item['key'] for item in items}-{'assistant','settings'}, 'Sidebar group coverage mismatch'
+assert set(groups)=={item['key'] for item in items}-{'settings','interviews','candidatesearch','helpdesk'}, 'Sidebar group coverage mismatch'
 
 rows=[]
 for item in items:
@@ -71,6 +73,8 @@ for item in items:
    assert '/performance-journal' in screen and 'useRefreshData(load)' in screen, 'Performance journal missing API/refresh integration'
   elif key=='dataquality':
    assert 'function DataQualityCenter' in screen and '/admin/data-quality/issues' in screen, 'Data quality page missing API integration'
+  elif key in ('requestdesk','helpdesk'):
+   assert "/service-center/cases?" in screen and f"page==='{key}'" in app
   elif key=='globalsearch':
    assert 'function GlobalSearch' in screen and '/search/records' in screen, 'Global search is not mounted'
   else:
@@ -78,13 +82,17 @@ for item in items:
  else:
   assert "page==='"+key+"'" in app, 'No matching screen for '+key
   module='App.tsx'
- rows.append({'Group':groups.get(key,'AI & Preferences'), 'Feature':item['label'], 'Route':paths[key],
+ rows.append({'Group':groups.get(key,groups.get({'interviews':'recruitment','candidatesearch':'recruitment','helpdesk':'requestdesk'}.get(key,''),'AI & Preferences')), 'Feature':item['label'], 'Route':paths[key],
               'Access':('Administrator' if item['restriction']=='admin' else 'Management' if item['restriction']=='management' else 'Authenticated user'),
               'Screen source':'web/src/'+module,'Navigation / screen source check':'Passed',
               'Live UI and workflow check':'Not tested — requires running Docker/browser and real role accounts'})
-assert len(rows)==73
+assert '<FloatingAIBot open={aiDockOpen}' in app and "if(key==='assistant'){setAiDockOpen(true)" in app
+rows.append({'Group':'AI & Preferences','Feature':'Floating AI assistant','Route':paths['assistant'],
+             'Access':'Authenticated user','Screen source':'web/src/FloatingAIBot.tsx',
+             'Navigation / screen source check':'Passed','Live UI and workflow check':'Not tested'})
+assert len(rows)==len(paths)
 if '--csv' in sys.argv:
- target=ROOT/'docs/SASS_HRM_73_PAGE_CHECKLIST.csv'
+ target=ROOT/f'docs/SASS_HRM_{len(rows)}_PAGE_CHECKLIST.csv'
  target.parent.mkdir(parents=True,exist_ok=True)
  with target.open('w',encoding='utf-8-sig',newline='') as f:
   writer=csv.DictWriter(f,fieldnames=list(rows[0]));writer.writeheader();writer.writerows(rows)

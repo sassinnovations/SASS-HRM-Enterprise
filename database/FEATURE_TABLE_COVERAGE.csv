@@ -81,6 +81,9 @@ document_review_events,Existing HRM schema,Yes,employee_services_v20.py,Not esta
 document_vault,Existing HRM schema,Yes,"ai_copilot.py, main.py, operations_v09.py",Not established by schema audit
 documents,Existing HRM schema,Yes,"employee_services_v20.py, enterprise.py",Not established by schema audit
 employee_assignment_handover_checklists,Database foundation only,No,,Not established by schema audit
+employee_calendar_agenda_preferences,Existing HRM schema,Yes,calendar_v27.py,Not established by schema audit
+employee_calendar_categories,Existing HRM schema,Yes,calendar_v27.py,Not established by schema audit
+employee_calendar_preferences,Existing HRM schema,Yes,calendar_v27.py,Not established by schema audit
 employee_certifications,Database foundation only,No,,Not established by schema audit
 employee_contact_change_reviews,Database foundation only,No,,Not established by schema audit
 employee_contract_renewal_requests,Database foundation only,No,,Not established by schema audit
@@ -93,7 +96,9 @@ employee_employment_verification_requests,Database foundation only,No,,Not estab
 employee_exit_clearance_signoffs,Database foundation only,No,,Not established by schema audit
 employee_exit_interviews,Database foundation only,No,,Not established by schema audit
 employee_hr_case_consents,Database foundation only,No,,Not established by schema audit
+employee_inbox_display_defaults,Existing HRM schema,Yes,workspace_v30.py,Not established by schema audit
 employee_inbox_preferences,Existing HRM schema,Yes,workspace_v30.py,Not established by schema audit
+employee_inbox_reminders,Existing HRM schema,Yes,workspace_v30.py,Not established by schema audit
 employee_internal_mobility_applications,Database foundation only,No,,Not established by schema audit
 employee_job_history,Database foundation only,No,,Not established by schema audit
 employee_license_renewals,Database foundation only,No,,Not established by schema audit
@@ -107,6 +112,9 @@ employee_preferences,Existing HRM schema,Yes,"ai_copilot.py, employee_services_v
 employee_probation_action_items,Database foundation only,No,,Not established by schema audit
 employee_probation_reviews,Database foundation only,No,,Not established by schema audit
 employee_saved_searches,Existing HRM schema,Yes,global_search_v37.py,Not established by schema audit
+employee_security_checklist,Existing HRM schema,Yes,security_center_v45.py,Not established by schema audit
+employee_security_checklist_settings,Existing HRM schema,Yes,security_center_v45.py,Not established by schema audit
+employee_security_preferences,Existing HRM schema,Yes,security_center_v45.py,Not established by schema audit
 employee_skill_gap_reviews,Database foundation only,No,,Not established by schema audit
 employee_skills,Existing HRM schema,Yes,"ai_copilot.py, main.py, platform_plus.py",Not established by schema audit
 employee_training_compliance_cases,Database foundation only,No,,Not established by schema audit
@@ -143,7 +151,7 @@ hr_task_template_assignments,Existing HRM schema,Yes,workforce_planning_v36.py,N
 hr_task_templates,Existing HRM schema,Yes,"ai_copilot.py, module_excel_center.py, workforce_planning_v36.py",Not established by schema audit
 hr_tasks,Existing HRM schema,Yes,"advanced.py, ai_copilot.py, data_quality_v38.py, main.py, talent_ops.py, workflow_reminders_v35.py, workforce_planning_v36.py, workspace_v30.py",Not established by schema audit
 hr_ticket_escalation_records,Database foundation only,No,,Not established by schema audit
-hrm_work_catalog,Existing HRM schema,Yes,work_catalog.py,Not established by schema audit
+hrm_work_catalog,Existing HRM schema,Yes,"ai_copilot.py, work_catalog.py",Not established by schema audit
 hrm_work_catalog_settings,Existing HRM schema,Yes,work_catalog.py,Not established by schema audit
 integration_connector_health_results,Database foundation only,No,,Not established by schema audit
 integration_field_mapping_revisions,Database foundation only,No,,Not established by schema audit
@@ -159,7 +167,10 @@ leave_accrual_ledger,Database foundation only,No,,Not established by schema audi
 leave_balance_reconciliations,Database foundation only,No,,Not established by schema audit
 leave_blackout_periods,Database foundation only,No,,Not established by schema audit
 leave_carryforward_events,Database foundation only,No,,Not established by schema audit
+leave_coverage_manual_plans,Existing HRM schema,Yes,workforce_planning_v36.py,Not established by schema audit
+leave_coverage_personal_preferences,Existing HRM schema,Yes,workforce_planning_v36.py,Not established by schema audit
 leave_coverage_settings,Existing HRM schema,Yes,workforce_planning_v36.py,Not established by schema audit
+leave_coverage_warning_options,Existing HRM schema,Yes,workforce_planning_v36.py,Not established by schema audit
 leave_encashment_requests,Database foundation only,No,,Not established by schema audit
 leave_entitlements,Existing HRM schema,Yes,"ai_copilot.py, enterprise.py, main.py, platform_plus.py",Not established by schema audit
 leave_request_approval_steps,Database foundation only,No,,Not established by schema audit
@@ -216,6 +227,7 @@ performance_feedback_requests,Existing HRM schema,Yes,performance_growth_v40.py,
 performance_followup_actions,Existing HRM schema,Yes,performance_actions_v41.py,Not established by schema audit
 performance_goal_checkins,Existing HRM schema,Yes,performance_journal_v42.py,Not established by schema audit
 performance_review_cycles,Existing HRM schema,Yes,"performance_actions_v41.py, performance_v39.py",Not established by schema audit
+personal_calendar_event_categories,Existing HRM schema,Yes,calendar_v27.py,Not established by schema audit
 personal_calendar_events,Existing HRM schema,Yes,"ai_copilot.py, calendar_v27.py, developer_access.py",Not established by schema audit
 policies,Existing HRM schema,Yes,"ai_copilot.py, enterprise.py, main.py, operations_v09.py, workflows_v07.py",Not established by schema audit
 policy_acknowledgements,Existing HRM schema,Yes,"ai_copilot.py, main.py, operations_v09.py, workflows_v07.py",Not established by schema audit
@@ -249,6 +261,10 @@ retention_hold_requests,Database foundation only,No,,Not established by schema a
 reviews,Existing HRM schema,Yes,enterprise.py,Not established by schema audit
 salary_packages,Existing HRM schema,Yes,"compensation_ops.py, operations_v09.py, payroll_plus.py",Not established by schema audit
 schema_migrations,Existing HRM schema,Yes,mysql_backend.py,Not established by schema audit
+self_service_draft_organization,Existing HRM schema,Yes,self_service_v31.py,Not established by schema audit
+self_service_draft_views,Existing HRM schema,Yes,self_service_v31.py,Not established by schema audit
+self_service_drafts,Existing HRM schema,Yes,self_service_v31.py,Not established by schema audit
+self_service_preferences,Existing HRM schema,Yes,self_service_v31.py,Not established by schema audit
 service_categories,Existing HRM schema,Yes,"ai_copilot.py, culture_suite.py, module_excel_center.py, service_center.py",Not established by schema audit
 service_messages,Existing HRM schema,Yes,"service_center.py, talent_ops.py",Not established by schema audit
 service_requests,Existing HRM schema,Yes,"ai_copilot.py, culture_suite.py, main.py, service_center.py, talent_ops.py",Not established by schema audit

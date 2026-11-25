@@ -119,8 +119,7 @@ def init_db():
         if 'work_email' not in [x['name'] for x in c.execute('PRAGMA table_info(employees)').fetchall()]:
             c.execute('ALTER TABLE employees ADD COLUMN work_email TEXT')
         c.execute("UPDATE employees SET work_email=lower(email) WHERE work_email IS NULL OR trim(work_email)=''")
-        if DB_ENGINE != 'mysql':
-            c.execute('CREATE UNIQUE INDEX IF NOT EXISTS ux_employees_work_email ON employees(work_email)')
+        c.execute('CREATE UNIQUE INDEX IF NOT EXISTS ux_employees_work_email ON employees(work_email)')
         c.execute('''CREATE TABLE IF NOT EXISTS developer_grants (
             employee_id INTEGER PRIMARY KEY, enabled INTEGER NOT NULL DEFAULT 1,
             granted_at TEXT NOT NULL, FOREIGN KEY(employee_id) REFERENCES employees(id))''')
