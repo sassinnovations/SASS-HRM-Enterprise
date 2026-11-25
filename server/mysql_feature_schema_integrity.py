@@ -1,6 +1,6 @@
 """Read-only verification for the SASS HRM — SASS INNOVATIONS ENTERPRISE MySQL schema.
 
-Offline mode compares bundled installers, 270-table inventory, indexes, foreign keys,
+Offline mode compares bundled installers, 272-table inventory, indexes, foreign keys,
 and backend-owned declarations. Live mode additionally queries INFORMATION_SCHEMA;
 no user/candidate/payroll records are read or changed.
 """
@@ -133,15 +133,22 @@ def check_file_package():
     required = get_required_schema()
     if (issues := source_coverage(required)):
         raise ValueError('Backend table declarations not covered by MySQL: ' + '; '.join(issues[:10]))
-    if len(required) != 270 or sum(map(len, required.values())) != 2226:
-        raise ValueError('Release contract changed; review/refresh 270-table, 2226-column inventory')
+    if len(required) != 272 or sum(map(len, required.values())) != 2242:
+        raise ValueError('Release contract changed; review/refresh 272-table, 2242-column inventory')
     if MANUAL.read_bytes() != SCHEMA.read_bytes():
         raise ValueError('database/01_application_schema.sql is out of sync with server/mysql_schema.sql')
 
     tables, indexes, foreign_keys, ordered = sql_objects(schema)
-    if ordered[-1] != 'official_work_detail_requests':
-        raise ValueError('Official-details approval table must be the final additive table')
-    historical_order = ordered[:-1]  # Keep the older migration-order assertions unchanged.
+    catalog_names = ['hrm_work_catalog', 'hrm_work_catalog_settings']
+    if ordered[-3:] != ['official_work_detail_requests', *catalog_names]:
+        raise ValueError('Official-details approval and work catalog must be the final additive tables')
+    catalog_sql = (ROOT / 'database/26_PRODUCT_PROJECT_CATALOG_ADD_ONLY.sql').read_text(encoding='utf-8')
+    catalog_tables, catalog_indexes, catalog_keys, catalog_order = sql_objects(catalog_sql)
+    if (catalog_order != catalog_names or len(split_ddl(catalog_sql)) != len(catalog_names)
+            or any(catalog_tables[name] != tables[name] for name in catalog_names)
+            or not catalog_indexes <= indexes or not catalog_keys <= foreign_keys):
+        raise ValueError('Work catalog migration must match the canonical add-only definitions')
+    historical_order = ordered[:-3]  # Keep the older migration-order assertions unchanged.
     fresh_sql = FRESH.read_text(encoding='utf-8')
     fresh_tables, fresh_indexes, fresh_foreign_keys, fresh_ordered = sql_objects(fresh_sql)
     if tables != fresh_tables or indexes != fresh_indexes or foreign_keys != fresh_foreign_keys or ordered != fresh_ordered:

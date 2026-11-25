@@ -9,7 +9,7 @@ type Catalog={features:Feature[];datasets:Dataset[];import_limit:number;export_l
 type Preview={module:string;valid_rows:number;errors:{row:number;message:string}[];sample:Record<string,unknown>[];preview_token:string|null;note:string};
 type MasterRecord={id:number;[key:string]:string|number|boolean|null};
 const API=(import.meta.env.VITE_API_URL||'').replace(/\/$/,'')+'/api';
-function headers(){const token=sessionStorage.getItem('sass_token');return token?{Authorization:`Bearer ${token}`}:{}}
+function headers():Record<string,string>{const token=sessionStorage.getItem('sass_token');return token?{Authorization:`Bearer ${token}`}:{}}
 async function api<T>(path:string,method='GET',payload?:unknown):Promise<T>{
  const response=await hrmFetch(API+path,{method,headers:{...headers(),...(payload===undefined?{}:{'Content-Type':'application/json'})},
   ...(payload===undefined?{}:{body:JSON.stringify(payload)}),cache:'no-store'});

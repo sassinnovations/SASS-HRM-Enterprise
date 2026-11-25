@@ -1,0 +1,46 @@
+.cw{--cw-text:#1e2c45;--cw-muted:#53637b;--cw-line:#dce4f1;--cw-accent:#5a5fe9;display:grid;gap:1rem;color:var(--cw-text)}
+.cw-banner,.cw-card{background:#fff;border:1px solid var(--cw-line);border-radius:1rem;padding:clamp(1rem,2.5vw,1.6rem);box-shadow:0 6px 20px #22375a08}
+.cw-banner,.cw-title,.cw-actions,.cw-row-actions{display:flex;align-items:center;gap:.65rem}
+.cw-banner{justify-content:space-between;gap:1.25rem;align-items:flex-start}
+.cw-title{align-items:flex-start;gap:1rem}
+.cw-title>svg{box-sizing:content-box;flex:none;color:#393fa8;background:#eef0ff;padding:.65rem;border-radius:.8rem}
+.cw-title h1,.cw-editor h2,.cw-dialog h2{margin:.15rem 0;color:var(--cw-text)}
+.cw-title p{margin:.3rem 0 0;color:var(--cw-muted);font-size:.92rem}
+.cw-title .cw-kicker{margin:0;color:#4248a3;font-size:.72rem;text-transform:uppercase;font-weight:700;letter-spacing:.09em}
+.cw-actions,.cw-row-actions{flex-wrap:wrap}
+.cw-button{display:inline-flex;align-items:center;justify-content:center;gap:.35rem;white-space:nowrap;background:#fff;color:var(--cw-text);border:1px solid var(--cw-line);border-radius:.6rem;padding:.52rem .75rem;font:inherit;font-size:.85rem;font-weight:650;cursor:pointer}
+.cw-button:disabled{cursor:not-allowed;opacity:.58}
+.cw-button:not(:disabled):hover{background:#eef0ff}
+.cw .cw-primary{background:var(--cw-accent);border-color:var(--cw-accent);color:#fff}
+.cw .cw-primary:not(:disabled):hover{background:#484cc8}
+.cw .cw-danger{color:#9d2636}
+.cw .cw-danger:not(:disabled):hover{background:#fff0f2}
+.cw .cw-danger-solid,.cw .cw-danger-solid:not(:disabled):hover{background:#a32535;border-color:#a32535;color:#fff}
+.cw :is(button,input,select,textarea,[tabindex]):focus-visible{outline:3px solid #5257d9;outline-offset:2px}
+.cw-grid,.cw-filters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.85rem;margin:.85rem 0}
+.cw-filters{grid-template-columns:minmax(12rem,2fr) repeat(2,minmax(9rem,1fr));margin-top:0}
+.cw label{display:grid;align-content:start;gap:.35rem;font-size:.85rem;font-weight:650}
+.cw label span{display:flex;align-items:center;gap:.35rem}
+.cw label small{color:var(--cw-muted);font-weight:400}
+.cw input,.cw select,.cw textarea{width:100%;min-width:0;padding:.6rem .65rem;border:1px solid var(--cw-line);border-radius:.55rem;color:var(--cw-text);background:#fff;font:inherit;font-weight:400}
+.cw textarea{resize:vertical}
+.cw-span{grid-column:1/-1}
+.cw-count,.cw-empty{padding:.45rem 0;margin:0;color:var(--cw-muted);font-size:.85rem}
+.cw-table-scroll{overflow:auto}
+.cw table{width:100%;min-width:640px;border-collapse:collapse;text-align:left;font-size:.85rem}
+.cw th,.cw td{padding:.7rem .55rem;border-bottom:1px solid var(--cw-line);vertical-align:top}
+.cw thead{background:#f3f5fb;color:var(--cw-muted)}
+.cw tbody th{min-width:10rem}
+.cw tbody small{display:block;max-width:27ch;margin-top:.25rem;font-weight:400;overflow-wrap:anywhere;color:var(--cw-muted);white-space:pre-wrap}
+.cw-status{display:inline-block;padding:.18rem .46rem;background:#edf0f5;color:#3d4d63;border-radius:1rem;font-size:.75rem;white-space:nowrap}
+.cw-status[data-status="Active"],.cw-status[data-status="Completed"]{color:#136148;background:#e6f6ef}
+.cw-status[data-status="On Hold"]{color:#775215;background:#fff2db}
+.cw-notice,.cw-error{padding:.65rem .85rem;border-radius:.6rem;margin:0}
+.cw-notice{background:#e7f6ef;color:#136148}
+.cw-error{background:#ffedf0;color:#8f2635}
+div.cw-error{display:flex;align-items:center;justify-content:space-between;gap:.75rem}
+.cw-editor .cw-error,.cw-dialog .cw-error{margin:.65rem 0}
+.cw-dialog{width:min(30rem,calc(100vw - 2rem));margin:auto;background:#fff;border:1px solid var(--cw-line);border-radius:1rem;color:var(--cw-text);padding:1.25rem;box-shadow:0 16px 64px #15223950}
+.cw-dialog::backdrop{background:#11223c65}
+@media(max-width:720px){.cw-banner{flex-direction:column}.cw-filters{grid-template-columns:1fr 1fr}.cw-filters label:first-child{grid-column:1/-1}}
+@media(max-width:460px){.cw-filters,.cw-grid{grid-template-columns:minmax(0,1fr)}}

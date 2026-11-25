@@ -10,8 +10,8 @@ from mysql_feature_schema_integrity import (
 from schema_audit import split_top_level
 
 required, indexes, fks = check_file_package()
-assert len(required) == 270 and sum(map(len,required.values())) == 2226
-assert len(indexes) == 329 and len(fks) == 504
+assert len(required) == 272 and sum(map(len,required.values())) == 2242
+assert len(indexes) == 331 and len(fks) == 505
 assert SCHEMA.read_bytes() == MANUAL.read_bytes()
 
 sql=CONTROL_ADD_ONLY.read_text(encoding='utf-8')

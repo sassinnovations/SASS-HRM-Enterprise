@@ -35,7 +35,7 @@ export function OrganizationWorkspace({isAdmin,departments,holidays,announcement
 
  const launch=(kind:Kind,item?:RecordData)=>{
   setNotice(null);setRemoval(null);
-  const values=kind==='department'?{name:String(item?.name||''),location:String(item?.location||'Hyderabad'),head_id:item?.head_id?String(item.head_id):''}:
+  const values:Record<string,string>=kind==='department'?{name:String(item?.name||''),location:String(item?.location||'Hyderabad'),head_id:item?.head_id?String(item.head_id):''}:
    kind==='holiday'?{name:String(item?.name||''),day:String(item?.day||today()),location:String(item?.location||'All')}:
    {title:String(item?.title||''),body:String(item?.body||'')};
   setEdit({kind,id:item?.id,values});

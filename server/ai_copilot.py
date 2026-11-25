@@ -6,6 +6,8 @@ unrestricted access to other employees. Source evidence is always treated as dat
 from __future__ import annotations
 
 import csv
+import hashlib
+import hmac
 import json
 import math
 import os
@@ -17,10 +19,11 @@ from pathlib import Path
 from typing import Any, Literal
 
 import httpx
+import jwt
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel, Field, ValidationError
 
-from main import app, audit, current_user, db, require_hr
+from main import JWT_SECRET, app, audit, current_user, db, require_hr, rows
 
 REGISTRY = Path(__file__).resolve().parent.parent / 'docs' / 'FEATURE_SCREEN_DATABASE_CONTRACTS.csv'
 CRUD_REGISTRY = Path(__file__).resolve().parent.parent / 'docs' / 'FEATURE_CRUD_ENDPOINT_MATRIX.csv'
@@ -59,7 +62,29 @@ ACTION_CATALOG = {
     'create_hr_task': {'label':'Assign a new HR task', 'feature':'tasks', 'effect':'create', 'description':'Managers/admins can create tasks within their ordinary reporting scope', 'roles':['admin','manager']},
     'mark_notification_read': {'label':'Mark my notification as read', 'feature':'inbox', 'effect':'update', 'description':'Marks a notification owned by my account as read'},
     'update_my_preferences': {'label':'Update my workspace preferences', 'feature':'settings', 'effect':'update', 'description':'Changes my date format, display density and reduced motion setting'},
+    # Admin catalog mutations reuse the owning module's validation, auditing and link safeguards.
+    'admin_office_create': {'label':'Add office location', 'feature':'orgsettings', 'effect':'create', 'description':'Create an approved organization office location', 'roles':['admin']},
+    'admin_office_edit': {'label':'Edit office location', 'feature':'orgsettings', 'effect':'update', 'description':'Update an office while preserving linked employee locations', 'roles':['admin']},
+    'admin_office_deactivate': {'label':'Deactivate office location', 'feature':'orgsettings', 'effect':'update', 'description':'Deactivate an office only when references permit', 'roles':['admin']},
+    'admin_office_activate': {'label':'Reactivate office location', 'feature':'orgsettings', 'effect':'update', 'description':'Reactivate a previously inactive office', 'roles':['admin']},
+    'admin_office_delete': {'label':'Delete unused office location', 'feature':'orgsettings', 'effect':'delete', 'description':'Permanently delete an unreferenced office with a recorded reason', 'roles':['admin']},
+    'admin_category_create': {'label':'Add Request Desk category', 'feature':'requestdesk', 'effect':'create', 'description':'Create a service category for employee requests', 'roles':['admin']},
+    'admin_category_edit': {'label':'Edit Request Desk category', 'feature':'requestdesk', 'effect':'update', 'description':'Update an existing service category', 'roles':['admin']},
+    'admin_category_archive': {'label':'Archive Request Desk category', 'feature':'requestdesk', 'effect':'update', 'description':'Hide a category from new employee service requests', 'roles':['admin']},
+    'admin_category_restore': {'label':'Restore Request Desk category', 'feature':'requestdesk', 'effect':'update', 'description':'Make an archived category available again', 'roles':['admin']},
+    'admin_category_delete': {'label':'Delete unused Request Desk category', 'feature':'requestdesk', 'effect':'delete', 'description':'Delete only an archived category without linked requests', 'roles':['admin']},
+    'admin_template_create': {'label':'Add HR task template', 'feature':'tasktemplates', 'effect':'create', 'description':'Create an HR task template for future assignments', 'roles':['admin']},
+    'admin_template_edit': {'label':'Edit HR task template', 'feature':'tasktemplates', 'effect':'update', 'description':'Update future template defaults without changing assigned tasks', 'roles':['admin']},
+    'admin_template_archive': {'label':'Archive HR task template', 'feature':'tasktemplates', 'effect':'update', 'description':'Prevent further assignments from this template', 'roles':['admin']},
+    'admin_template_restore': {'label':'Restore HR task template', 'feature':'tasktemplates', 'effect':'update', 'description':'Reactivate an archived HR task template', 'roles':['admin']},
+    'admin_template_delete': {'label':'Delete unused HR task template', 'feature':'tasktemplates', 'effect':'delete', 'description':'Delete only archived templates with no assignment history', 'roles':['admin']},
 }
+
+
+ADMIN_CATALOG_ACTIONS = frozenset(key for key in ACTION_CATALOG if key.startswith('admin_'))
+ADMIN_TABLES = {'office':'organization_offices', 'category':'service_categories', 'template':'hr_task_templates'}
+ADMIN_ID_KEYS = {'office':'office_id', 'category':'category_id', 'template':'template_id'}
+
 
 
 # Assistant specialties are presentation/retrieval hints, never new roles or API permissions.
@@ -183,7 +208,7 @@ def chunks(content: str, size: int = 920, overlap: int = 130) -> list[str]:
 def rank(query: str, docs: list[dict], limit: int = 6) -> list[dict]:
     query_extra = query.lower()
     for key, extra in ALIASES.items():
-        if key in query_extra:
+        if re.search(r'\b' + re.escape(key) + r'\b', query_extra):
             query_extra += ' ' + extra
     q = terms(query_extra)
     if not q:
@@ -195,6 +220,9 @@ def rank(query: str, docs: list[dict], limit: int = 6) -> list[dict]:
         title_tokens = Counter(terms(doc.get('title', '')))
         indexed.append((doc, text_tokens, title_tokens, sum(text_tokens.values())))
     average = sum(n for _, _, _, n in indexed) / max(len(indexed), 1)
+    # Precompute document frequencies once. The previous per-document scan was
+    # quadratic when the organization published thousands of RAG chunks.
+    doc_freq = Counter(term for _, freq, _, _ in indexed for term in freq)
     matching = []
     for doc, freq, title, length in indexed:
         score = 0.0
@@ -202,7 +230,7 @@ def rank(query: str, docs: list[dict], limit: int = 6) -> list[dict]:
             count = freq.get(term, 0)
             exact_title = title.get(term, 0)
             if count:
-                df = sum(1 for _, tf, _, _ in indexed if term in tf)
+                df = doc_freq[term]
                 idf = math.log(1 + (len(indexed) - df + .5) / (df + .5))
                 score += multiplier * idf * (count * 2.2) / (count + 1.2 * (.25 + .75 * length / max(1.0, average)))
             if exact_title:
@@ -211,6 +239,83 @@ def rank(query: str, docs: list[dict], limit: int = 6) -> list[dict]:
             matching.append((score, doc))
     matching.sort(key=lambda row: row[0], reverse=True)
     return [d for _, d in matching[:limit]]
+
+
+
+def diverse_rank(query: str, docs: list[dict], limit: int = 6) -> list[dict]:
+    """Return relevant evidence without six near-identical chunks from one article.
+
+    Keep at most two passages from each source; no extra database queries and no
+    access-control changes (documents are already role-filtered by evidence()).
+    """
+    candidates = rank(query, docs, max(60, limit * 10))
+    per_source: Counter = Counter()
+    selected = []
+    for doc in candidates:
+        key = (doc.get('kind'), str(doc.get('id', doc.get('title', ''))))
+        if per_source[key] >= 2:
+            continue
+        per_source[key] += 1
+        selected.append(doc)
+        if len(selected) >= limit:
+            break
+    return selected
+
+
+# Natural-language action shortcuts are server-owned hints, not model-issued tools.
+# They only select from the existing permission-checked action catalog. Every
+# change must still pass the normal prepare -> preview -> confirm lifecycle.
+ACTION_INTENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ('admin_office_create', (r'\b(add|create)\b.{0,45}\b(office|office location)\b',)),
+    ('admin_office_edit', (r'\b(edit|update|change)\b.{0,45}\b(office location|office)\b',)),
+    ('admin_category_create', (r'\b(add|create)\b.{0,45}\b(service category|service type|request desk category)\b',)),
+    ('admin_category_edit', (r'\b(edit|update|change)\b.{0,45}\b(service category|service type|request desk category)\b',)),
+    ('admin_template_create', (r'\b(add|create)\b.{0,45}\b(task template|hr task template)\b',)),
+    ('admin_template_edit', (r'\b(edit|update|change)\b.{0,45}\b(task template|hr task template)\b',)),
+    ('cancel_attendance_correction', (r'\b(cancel|withdraw)\b.{0,55}\b(attendance correction|time correction)\b',)),
+    ('request_attendance_correction', (r'\b(request|submit|fix|correct|change)\b.{0,55}\b(attendance|check.in time|check.out time)\b',)),
+    ('check_out', (r'\b(check[ -]?out|clock[ -]?out|punch[ -]?out)\b',)),
+    ('check_in', (r'\b(check[ -]?in|clock[ -]?in|punch[ -]?in)\b',)),
+    ('cancel_work_mode', (r'\b(cancel|withdraw)\b.{0,60}\b(work arrangement|work mode|remote request|hybrid request)\b',)),
+    ('request_work_mode', (r'\b(request|apply|change|switch)\b.{0,55}\b(work arrangement|work mode|remote work|hybrid work)\b',)),
+    ('delete_personal_event', (r'\b(delete|remove)\b.{0,45}\b(my |personal )?(calendar event|event)\b',)),
+    ('edit_personal_event', (r'\b(edit|change|update|reschedule)\b.{0,45}\b(my |personal )?(calendar event|event)\b',)),
+    ('create_personal_event', (r'\b(create|add|schedule|make)\b.{0,45}\b(my |personal )?(calendar event|event|appointment)\b',)),
+    ('mark_notification_read', (r'\b(mark|set)\b.{0,45}\bnotification\b.{0,30}\bread\b',)),
+    ('update_my_preferences', (r'\b(update|change|edit|set)\b.{0,55}\b(my )?(workspace preferences|display density|date format|reduce motion)\b',)),
+    ('submit_expense', (r'\b(submit|file|claim|create|add)\b.{0,60}\b(expense|reimbursement)\b',)),
+    ('submit_service_request', (r'\b(submit|open|create|raise|file)\b.{0,50}\b(ticket|service request|support request|helpdesk request)\b',)),
+    ('submit_leave', (r'\b(submit|request|apply for|book|file|create)\b.{0,50}\b(leave|time off|holiday request)\b',)),
+    ('update_task_status', (r'\b(update|change|complete|finish|mark)\b.{0,55}\b(my |assigned )?(hr )?task( status)?\b',)),
+    ('create_hr_task', (r'\b(assign|create|add)\b.{0,45}\b(hr )?task\b',)),
+)
+
+
+def suggest_reviewed_action(question: str, user: dict) -> dict | None:
+    """Identify an explicit workflow intent; never execute a mutation from chat."""
+    # Concept explanations and negated instructions are not requests to act.
+    if re.search(r'^\s*(what is|what does|define|explain|meaning of|difference between)\b', question, re.I):
+        return None
+    if re.search(r"\b(?:do not|don't|dont|never|not to|avoid)\b", question, re.I):
+        return None
+    for operation, patterns in ACTION_INTENTS:
+        if not any(re.search(pattern, question, re.I) for pattern in patterns):
+            continue
+        if not allowed_action(operation, user):
+            continue
+        metadata = ACTION_CATALOG[operation]
+        target = next((r for r in catalog() if r['feature_key'] == metadata['feature']
+                       and permitted(r, user)), None)
+        if not target:
+            continue
+        return {'answer': (f'I can help you prepare “{metadata["label"]}”. '
+                            'Select Review action below, complete the form, inspect the server-generated preview, '
+                            'then explicitly confirm. Nothing has been changed yet.'),
+                'sources': [], 'features': [{'key': target['feature_key'],
+                                            'label': target['feature_name'], 'url': target['feature_url']}],
+                'actions': [{'operation': operation, 'label': metadata['label']}],
+                'mode': 'action-guidance', 'executed': False, 'requires_confirmation': True}
+    return None
 
 
 def evidence(user: dict[str, Any]) -> list[dict]:
@@ -248,6 +353,54 @@ def evidence(user: dict[str, Any]) -> list[dict]:
         for n, chunk in enumerate(chunks(row['content'][:24000])):
             docs.append({'kind': 'knowledge', 'id': str(row['id']), 'title': row['title'], 'url': url, 'feature_key':row['feature_key'], 'audience':row['audience'], 'text': f'{row["category"]}: {row["title"]}. {chunk}', 'part': n + 1})
     return docs
+
+
+# Deterministic, owner-scoped task summary. It is not placed in RAG or sent to
+# an external AI provider, and it never accepts an employee_id from a caller.
+MY_PENDING_VIEWS = (
+    ('leave', 'Pending leave requests', '/compensation/leave-management',
+     "SELECT COUNT(*) FROM leave_requests WHERE employee_id=? AND status='Pending'"),
+    ('service', 'Open service requests', '/talent/request-desk',
+     "SELECT COUNT(*) FROM service_requests WHERE employee_id=? AND status NOT IN ('Resolved','Closed','Cancelled','Rejected')"),
+    ('tasks', 'Active assigned tasks', '/talent/hr-tasks',
+     "SELECT COUNT(*) FROM hr_tasks WHERE assignee_id=? AND status NOT IN ('Completed','Cancelled')"),
+    ('expenses', 'Pending expense claims', '/compensation/expenses-claims',
+     "SELECT COUNT(*) FROM expenses WHERE employee_id=? AND status='Pending'"),
+    ('corrections', 'Pending attendance corrections', '/compensation/attendance-corrections',
+     "SELECT COUNT(*) FROM attendance_corrections WHERE employee_id=? AND status='Pending'"),
+    ('workmode', 'Pending work arrangement requests', '/culture/work-arrangements',
+     "SELECT COUNT(*) FROM work_mode_requests WHERE employee_id=? AND status='Pending'"),
+)
+
+
+def pending_snapshot(user: dict) -> dict:
+    with db() as c:
+        items = [{'key': key, 'label': label, 'url': url,
+                  'count': int(c.execute(sql, (user['id'],)).fetchone()[0])}
+                 for key, label, url, sql in MY_PENDING_VIEWS]
+    return {'items': items, 'total': sum(item['count'] for item in items),
+            'scope': 'own_records_only', 'checked_at': utcnow()}
+
+
+def pending_response(user: dict) -> dict:
+    snapshot = pending_snapshot(user)
+    outstanding = [item for item in snapshot['items'] if item['count'] > 0]
+    if not outstanding:
+        answer = 'You have no open items in the six connected HRM workflows. Other modules may have additional items; open their screens to check.'
+    else:
+        answer = ('Your open HRM items (' + str(snapshot['total']) + ' total across six workflows):\n'
+                  + '\n'.join(f"• {item['label']}: {item['count']}" for item in outstanding)
+                  + '\nThese are live counts from your own HRM records, not approvals or completed actions.')
+    return {'answer': answer, 'sources': [{'kind':'own_record', 'title': item['label'], 'url': item['url']}
+                                          for item in outstanding],
+            'features': [], 'actions': [], 'mode': 'data-backed', 'executed': False,
+            'snapshot': snapshot}
+
+
+def is_pending_summary_query(text: str) -> bool:
+    return bool(re.search(r'\b(my pending (items|requests|work|tasks|hr items)|'
+                          r'my outstanding (items|requests|tasks)|my open requests|'
+                          r'my action items|what needs my attention|what do i need to do)\b', text, re.I))
 
 
 def self_lookup(user: dict, q: str) -> dict | None:
@@ -374,8 +527,25 @@ def company_specific(question: str) -> bool:
                 and re.search(r'\b(?:policy|rules?|benefits?|salary|payroll|leave|entitlement|process|approval|procedure|handbook|contract)\b', question, re.I))
 
 
+def safe_general_history(turns: list) -> list[dict[str, str]]:
+    """Retain a few explicitly supplied, safe general-chat turns only.
+
+    Never forward previous answers about HRM records, company policy, or restricted
+    retrieval to the provider. The client also excludes those turns, but privacy
+    must be enforced here even for a modified client.
+    """
+    selected = []
+    for turn in turns[-6:]:
+        role = turn.role if hasattr(turn, 'role') else turn.get('role', '')
+        content = turn.content if hasattr(turn, 'content') else turn.get('content', '')
+        if not safe_for_provider(content) or company_specific(content):
+            return []  # Do not transmit partial context from a sensitive discussion.
+        selected.append({'role': role, 'content': content[:700]})
+    return selected if sum(len(t['content']) for t in selected) <= 3000 else []
+
+
 async def generate_with_evidence(question: str, selected: list[dict], agent: str = 'general',
-                                 allow_general: bool = False) -> str | None:
+                                 allow_general: bool = False, recent_turns: list | None = None) -> str | None:
     if not provider_ready() or not safe_for_provider(question):
         return None
     # Retrieved restricted knowledge is never sent to an external model.
@@ -387,6 +557,10 @@ async def generate_with_evidence(question: str, selected: list[dict], agent: str
     payload = [{'source': idx + 1, 'title': entry['title'], 'content': entry['text'][:1500]}
                for idx, entry in enumerate(safe[:5])]
     description = ASSISTANT_AGENTS.get(agent, ASSISTANT_AGENTS['general'])['description']
+    # Conversation context is useful only for general questions; RAG and company
+    # topics are answered from the current authorized evidence, never chat history.
+    history = (safe_general_history(recent_turns or [])
+               if allow_general and not safe and not company_specific(question) else [])
     system = (
         'You are SASS AI, a helpful professional assistant embedded in an enterprise HR system. '
         'Your specialty is: ' + description + '. Respond to the user directly in a useful, conversational way. '
@@ -407,7 +581,7 @@ async def generate_with_evidence(question: str, selected: list[dict], agent: str
                 os.getenv('AI_BASE_URL', 'https://api.openai.com/v1').rstrip('/') + '/chat/completions',
                 headers={'Authorization': f'Bearer {os.environ["AI_API_KEY"].strip()}'},
                 json={'model': os.getenv('AI_MODEL', 'gpt-4.1-mini'), 'temperature': 0.2, 'max_tokens': 650,
-                      'messages': [{'role': 'system', 'content': system},
+                      'messages': [{'role': 'system', 'content': system}, *history,
                                    {'role': 'user', 'content': json.dumps({'question': question[:1000], 'approved_sources': payload})}]},
             )
             response.raise_for_status()
@@ -454,10 +628,18 @@ def offline_answer(question: str, agent: str, has_company_docs: bool = False) ->
             '(AI_API_KEY and AI_COPILOT_GENERATION=1). You can also ask me to explain ATS, HRMS, GenAI or RAG.')
 
 
+class GeneralChatTurn(BaseModel):
+    role: Literal['user', 'assistant']
+    content: str = Field(min_length=1, max_length=700)
+
+
 class AskBody(BaseModel):
     message: str = Field(min_length=2, max_length=1000)
     feature_key: str | None = Field(default=None, max_length=90)
-    agent: Literal['general', 'people', 'recruitment', 'payroll', 'growth', 'support'] = 'general' 
+    agent: Literal['general', 'people', 'recruitment', 'payroll', 'growth', 'support'] = 'general'
+    # Ephemeral browser-supplied context, never stored in MySQL or application logs.
+    conversation_context: str | None = Field(default=None, max_length=2500)
+    recent_turns: list[GeneralChatTurn] = Field(default_factory=list, max_length=6)
 
 
 class KnowledgeCreate(BaseModel):
@@ -469,12 +651,70 @@ class KnowledgeCreate(BaseModel):
     audience: Literal['All','Manager','Admin'] = 'All'
 
 
+class KnowledgeImportRow(BaseModel):
+    title: str = Field(min_length=4, max_length=190)
+    category: str = Field(min_length=2, max_length=100)
+    content: str = Field(min_length=20, max_length=24000)
+    feature_key: str = Field(default='', max_length=80)
+    audience: Literal['All', 'Manager', 'Admin'] = 'All'
+
+
+class KnowledgeBatch(BaseModel):
+    rows: list[KnowledgeImportRow] = Field(min_length=1, max_length=50)
+
+
+class KnowledgeBatchConfirm(KnowledgeBatch):
+    preview_token: str = Field(min_length=25, max_length=120)
+    confirm: Literal['IMPORT_DRAFTS']
+
+
+def normalized_knowledge_batch(rows: list[KnowledgeImportRow]) -> list[dict]:
+    normalized: list[dict] = []
+    seen = set()
+    for row in rows:
+        item = row.model_dump()
+        for field in ('title', 'category', 'content', 'feature_key'):
+            item[field] = item[field].strip()
+        if len(item['title']) < 4 or len(item['category']) < 2 or len(item['content']) < 20:
+            raise HTTPException(422, 'Each article needs a title, category and at least 20 content characters')
+        knowledge_scope_valid(item['feature_key'], item['audience'])
+        signature = (item['title'].casefold(), item['feature_key'], item['audience'])
+        if signature in seen:
+            raise HTTPException(409, 'Duplicate article title, feature and audience in this batch')
+        seen.add(signature)
+        normalized.append(item)
+    if sum(len(item['content']) for item in normalized) > 180000:
+        raise HTTPException(413, 'Batch content is too large; split it into smaller uploads')
+    return normalized
+
+
+def assert_knowledge_not_duplicated(c, rows: list[dict]):
+    existing = c.execute('''SELECT a.title,COALESCE(s.feature_key,'') AS feature_key,
+                        COALESCE(s.audience,'All') AS audience
+                        FROM ai_knowledge_articles a LEFT JOIN ai_knowledge_scopes s
+                        ON s.article_id=a.id''').fetchall()
+    known = {(str(item['title']).strip().casefold(), item['feature_key'], item['audience'])
+             for item in existing}
+    for item in rows:
+        if (item['title'].casefold(), item['feature_key'], item['audience']) in known:
+            raise HTTPException(409, 'An article with this title, feature and audience already exists')
+
+
+def _knowledge_preview_token(rows: list[dict], actor_id: int, timestamp: int) -> str:
+    # A signed, short-lived review token binds the exact rows and actor to
+    # confirmation. The key is never sent to the browser.
+    canonical = json.dumps(rows, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+    payload = f'{actor_id}:{timestamp}:{canonical}'.encode('utf-8')
+    signature = hmac.new(os.environ['JWT_SECRET'].encode('utf-8'), payload, hashlib.sha256).hexdigest()
+    return f'{timestamp}.{signature}'
+
+
 class KnowledgeState(BaseModel):
     status: Literal['Draft', 'Published']
 
 
 class PrepareBody(BaseModel):
-    operation: Literal['submit_leave', 'submit_service_request', 'check_in', 'check_out', 'create_personal_event', 'edit_personal_event', 'delete_personal_event', 'request_work_mode', 'cancel_work_mode', 'submit_expense', 'request_attendance_correction', 'cancel_attendance_correction', 'update_task_status', 'create_hr_task', 'mark_notification_read', 'update_my_preferences']
+    operation: Literal['submit_leave', 'submit_service_request', 'check_in', 'check_out', 'create_personal_event', 'edit_personal_event', 'delete_personal_event', 'request_work_mode', 'cancel_work_mode', 'submit_expense', 'request_attendance_correction', 'cancel_attendance_correction', 'update_task_status', 'create_hr_task', 'mark_notification_read', 'update_my_preferences', 'admin_office_create', 'admin_office_edit', 'admin_office_deactivate', 'admin_office_activate', 'admin_office_delete', 'admin_category_create', 'admin_category_edit', 'admin_category_archive', 'admin_category_restore', 'admin_category_delete', 'admin_template_create', 'admin_template_edit', 'admin_template_archive', 'admin_template_restore', 'admin_template_delete']
     parameters: dict[str, Any]
 
 
@@ -524,8 +764,116 @@ def _positive_record_id(data: dict, key: str) -> int:
     return value
 
 
+def _admin_catalog_row(kind: str, record_id: int) -> dict:
+    table = ADMIN_TABLES[kind]  # server-owned, never influenced by the request
+    with db() as c:
+        row = c.execute(f'SELECT * FROM {table} WHERE id=?', (record_id,)).fetchone()
+    if row is None:
+        raise HTTPException(404, f'{kind.title()} no longer exists')
+    return dict(row)
+
+
+def _admin_catalog_fingerprint(row: dict) -> str:
+    # Guard against stale browser proposals; do not expose the underlying row to chat.
+    encoded = json.dumps(row, sort_keys=True, ensure_ascii=False, default=str, separators=(',', ':'))
+    return hashlib.sha256(encoded.encode('utf-8')).hexdigest()
+
+
+def _admin_catalog_form(operation: str, parameters: dict, user: dict) -> tuple[dict, str]:
+    if user['role'] != 'admin':
+        raise HTTPException(403, 'HR Administrator only')
+    kind = next((k for k in ADMIN_TABLES if operation.startswith(f'admin_{k}_')), None)
+    if not kind:
+        raise HTTPException(422, 'Unsupported administrative catalog')
+    verb = operation.rsplit('_', 1)[-1]
+    if verb == 'create':
+        if kind == 'office':
+            from organization_settings_v26 import Office, validate_office
+            model = Office.model_validate(parameters)
+            validate_office(model)
+        elif kind == 'category':
+            from culture_suite import ServiceCategoryCreate
+            model = ServiceCategoryCreate.model_validate(parameters)
+        else:
+            from workforce_planning_v36 import TaskTemplateIn
+            model = TaskTemplateIn.model_validate(parameters)
+        data = model.model_dump(mode='json')
+        label = str(data.get('name') or data.get('title') or ('office ' + data.get('code', ''))) 
+        return data, f'Create {kind} \"{label}\" using the existing HRM validation and audit workflow.'
+    key = ADMIN_ID_KEYS[kind]
+    record_id = _positive_record_id(parameters, key)
+    existing = _admin_catalog_row(kind, record_id)
+    args: dict = {key: record_id, 'expected_fingerprint': _admin_catalog_fingerprint(existing)}
+    if verb == 'edit':
+        if kind == 'office':
+            from organization_settings_v26 import Office, validate_office
+            model = Office.model_validate(parameters)
+            validate_office(model)
+        elif kind == 'category':
+            from culture_suite import ServiceCategoryCreate
+            model = ServiceCategoryCreate.model_validate(parameters)
+        else:
+            from workforce_planning_v36 import TaskTemplateIn
+            model = TaskTemplateIn.model_validate(parameters)
+        args['record'] = model.model_dump(mode='json')
+        return args, f'Edit existing {kind} #{record_id} ({existing.get("name", existing.get("title", existing.get("code", "")))}). Linked records retain the protections of their owning module.'
+    if verb in ('archive','restore','activate','deactivate'):
+        active = verb in ('restore', 'activate')
+        if bool(existing.get('is_active', existing.get('active', True))) == active:
+            raise HTTPException(409, f'{kind.title()} is already in that state')
+        args['active'] = active
+        return args, f'{verb.capitalize()} {kind} #{record_id}; linked-record and module restrictions still apply.'
+    if verb == 'delete':
+        reason = str(parameters.get('reason', '')).strip()
+        if len(reason) < 5 or len(reason) > 500:
+            raise HTTPException(422, 'Enter a deletion reason (5–500 characters)')
+        args['reason'] = reason
+        return args, f'PERMANENTLY DELETE {kind} #{record_id} ({existing.get("name", existing.get("title", existing.get("code", "")))}). Reason: {reason}. Any linked records will block deletion.'
+    raise HTTPException(422, 'Unsupported administrative action')
+
+
+def _execute_admin_catalog_action(operation: str, args: dict, user: dict) -> dict:
+    if user['role'] != 'admin':
+        raise HTTPException(403, 'HR Administrator only')
+    kind = next((k for k in ADMIN_TABLES if operation.startswith(f'admin_{k}_')), None)
+    if not kind:
+        raise HTTPException(422, 'Unsupported catalog action')
+    verb = operation.rsplit('_', 1)[-1]
+    if verb != 'create':
+        record_id = args[ADMIN_ID_KEYS[kind]]
+        if _admin_catalog_fingerprint(_admin_catalog_row(kind, record_id)) != args['expected_fingerprint']:
+            raise HTTPException(409, 'This catalog record has changed since review. Prepare the action again.')
+    if kind == 'office':
+        from organization_settings_v26 import Office, OfficeDelete, create_office, update_office, delete_office
+        if verb == 'create': return create_office(Office.model_validate(args), user=user)
+        if verb == 'edit': return update_office(record_id, Office.model_validate(args['record']), user=user)
+        if verb in ('activate', 'deactivate'):
+            existing = _admin_catalog_row(kind, record_id)
+            data = {key: existing[key] for key in ('code','name','city','country','address','timezone')}
+            data['is_active'] = args['active']
+            return update_office(record_id, Office.model_validate(data), user=user)
+        if verb == 'delete': return delete_office(record_id, OfficeDelete(confirm='DELETE', reason=args['reason']), user=user)
+    elif kind == 'category':
+        from culture_suite import (ServiceCategoryCreate, ServiceCategoryStatus, ServiceCategoryDelete,
+                                   service_category_create, service_category_edit, service_category_state, service_category_delete)
+        if verb == 'create': return service_category_create(ServiceCategoryCreate.model_validate(args), user=user)
+        if verb == 'edit': return service_category_edit(record_id, ServiceCategoryCreate.model_validate(args['record']), user=user)
+        if verb in ('archive','restore'): return service_category_state(record_id, ServiceCategoryStatus(active=args['active']), user=user)
+        if verb == 'delete': return service_category_delete(record_id, ServiceCategoryDelete(confirm='DELETE',reason=args['reason']), user=user)
+    elif kind == 'template':
+        from workforce_planning_v36 import (TaskTemplateIn, TaskTemplateDelete, TemplateState,
+                                            create_task_template, edit_task_template, set_task_template_state, delete_task_template)
+        if verb == 'create': return create_task_template(TaskTemplateIn.model_validate(args), user=user)
+        if verb == 'edit': return edit_task_template(record_id, TaskTemplateIn.model_validate(args['record']), user=user)
+        if verb in ('archive','restore'): return set_task_template_state(record_id, TemplateState(active=args['active']), user=user)
+        if verb == 'delete': return delete_task_template(record_id, TaskTemplateDelete(confirm='DELETE',reason=args['reason']), user=user)
+    raise HTTPException(422, 'Administrative action unavailable')
+
+
 def action_form(operation: str, parameters: dict, user: dict) -> tuple[dict, str]:
     """Validate using owning Pydantic models; identity and current snapshots come from the server."""
+    if operation in ADMIN_CATALOG_ACTIONS:
+        return _admin_catalog_form(operation, parameters, user)
     if operation == 'submit_leave':
         from main import LeaveCreate
         model = LeaveCreate.model_validate(parameters)
@@ -624,6 +972,8 @@ def action_form(operation: str, parameters: dict, user: dict) -> tuple[dict, str
 
 def execute_action(operation: str, args: dict, user: dict) -> dict:
     """Explicit dispatch through existing HRM handlers, never through arbitrary user-supplied routes."""
+    if operation in ADMIN_CATALOG_ACTIONS:
+        return _execute_admin_catalog_action(operation, args, user)
     if operation == 'submit_leave':
         from main import LeaveCreate, submit_leave
         return submit_leave(LeaveCreate.model_validate(args), user=user)
@@ -722,12 +1072,35 @@ def capabilities(user=Depends(current_user)):
             'confirmed_actions': [op for op in ACTION_CATALOG if allowed_action(op, user)],
             'other_actions': 'All other modules support authorized navigation and guidance; no arbitrary edits, payroll, HR approvals, hiring decisions or employee deletion',
             'private_records_sent_to_llm': False,
+            'recent_general_context': True, 'local_hr_followups': True, 'natural_language_action_hints': True,
+            'rag_source_diversity': True,
+            'provider_status': ('ready' if provider_ready() else
+                                'missing-key' if os.getenv('AI_COPILOT_GENERATION') == '1' else 'disabled'),
             'external_provider_note': 'When enabled, non-sensitive questions and all-staff approved excerpts can be sent to your configured GenAI provider. Do not enter confidential details.'}
 
 
 @app.get('/api/ai/copilot/agents')
 def assistant_agents(user=Depends(current_user)):
     return permitted_agents(user)
+
+
+@app.get('/api/ai/copilot/suggestions')
+def feature_suggestions(feature_key: str = '', user=Depends(current_user)):
+    """Lightweight, role-safe prompts for the page the user is on."""
+    questions = ['How can SASS AI help me?', 'Show my leave balance',
+                 'How do I find a feature?', 'Explain RAG with an example']
+    if feature_key:
+        item = next((f for f in catalog() if f['feature_key'] == feature_key and permitted(f, user)), None)
+        if not item:
+            raise HTTPException(404, 'Feature is not available to your account')
+        name = item['feature_name']
+        questions = [f'How do I use {name}?', f'What can I do in {name}?']
+        if item['settings_page'] and any(f['feature_key'] == item['settings_page'] and permitted(f, user) for f in catalog()):
+            questions.append(f'Where are the settings for {name}?')
+        if any(action['feature'] == feature_key and allowed_action(key, user) for key, action in ACTION_CATALOG.items()):
+            questions.append(f'What reviewed AI actions are available for {name}?')
+        questions.append(f'Open {name}')
+    return {'feature_key': feature_key, 'questions': questions[:5]}
 
 
 @app.get('/api/ai/copilot/features')
@@ -803,6 +1176,16 @@ def feature_integrations(user=Depends(current_user)):
             'items':items,'note':'Tests declared API routes and empty table reads only; not proof that a feature can create, edit or delete records.'}
 
 
+@app.get('/api/ai/copilot/actions/history')
+def my_ai_action_history(user=Depends(current_user)):
+    # No proposal contents, employee payloads or another actor's records are returned.
+    with db() as c:
+        records = c.execute('''SELECT operation,state,created_at FROM ai_action_proposals
+                    WHERE actor_id=? ORDER BY created_at DESC LIMIT 25''', (user['id'],)).fetchall()
+    return {'items':[{'operation':r['operation'], 'state':r['state'], 'created_at':r['created_at']} for r in records],
+            'scope':'my_actions_only', 'note':'Only actions prepared by your account are shown.'}
+
+
 @app.get('/api/ai/copilot/actions/catalog')
 def actions_catalog(user=Depends(current_user)):
     accessible = {item['feature_key'] for item in catalog() if permitted(item, user)}
@@ -826,9 +1209,17 @@ def my_action_options(user=Depends(current_user)):
                 staff = c.execute('SELECT id,name,code FROM employees WHERE account_active=1 AND (manager_id=? OR id=?) ORDER BY name LIMIT 300', (user['id'],user['id'])).fetchall()
         else:
             staff = []
+    admin_catalogs = {'offices': [], 'service_categories': [], 'task_templates': []}
+    if user['role'] == 'admin':
+        with db() as c:
+            admin_catalogs = {
+                'offices': [dict(x) for x in c.execute('SELECT id,code,name,city,country,address,timezone,is_active FROM organization_offices ORDER BY name LIMIT 300').fetchall()],
+                'service_categories': [dict(x) for x in c.execute('SELECT id,name,description,active FROM service_categories ORDER BY name LIMIT 300').fetchall()],
+                'task_templates': [dict(x) for x in c.execute('SELECT id,title,guidance,priority,due_offset_days,active FROM hr_task_templates ORDER BY title LIMIT 300').fetchall()],
+            }
     return {'personal_events': [dict(x) for x in events], 'pending_work_mode': [dict(x) for x in modes],
             'pending_corrections':[dict(x) for x in corrections], 'my_tasks':[dict(x) for x in tasks],
-            'assignable_staff':[dict(x) for x in staff], 'unread_notifications':[dict(x) for x in notifications]}
+            'assignable_staff':[dict(x) for x in staff], 'unread_notifications':[dict(x) for x in notifications], **admin_catalogs}
 
 
 @app.get('/api/ai/copilot/features/{feature_key}/guide')
@@ -919,8 +1310,152 @@ def _resolve_requested_feature(question: str, user: dict) -> dict | None:
             'matches':matches}
 
 
-@app.post('/api/ai/copilot/ask')
-async def ask(body: AskBody, user=Depends(current_user)):
+# v8: A permission-scoped command planner for every registered feature. It
+# produces navigation and confirmation *plans*, not arbitrary model-selected API calls.
+WORKFLOW_RECIPES = (
+    {'key':'recruit-to-hire','title':'Recruit and onboard','description':'Track a vacancy from ATS through onboarding and HRIS.',
+     'steps':(('recruitment','Review the vacancy and ATS pipeline'),('candidatesearch','Find suitable candidates'),
+              ('interviews','Coordinate interviews'),('onboarding','Start the authorized onboarding process'),
+              ('employees','Review the employee directory'))},
+    {'key':'employee-setup','title':'Employee setup','description':'Set up employee identity, organization and work tools.',
+     'steps':(('employees','Review the official HRIS record'),('accounts','Provision an authorized account'),
+              ('organization','Confirm the team assignment'),('assets','Manage assigned equipment'),
+              ('training','Locate mandatory learning'))},
+    {'key':'time-and-pay','title':'Time, leave and payroll','description':'Review time records and the payroll preparation flow.',
+     'steps':(('attendance','Review attendance'),('corrections','Submit or review corrections'),
+              ('leave','Review leave'),('timesheets','Review submitted timesheets'),
+              ('payrollengine','Open the protected payroll workbench'),('payroll','View payslip history'))},
+    {'key':'employee-self-service','title':'Employee self-service','description':'Handle everyday HR requests using existing approvals.',
+     'steps':(('profile','Check personal and official details'),('leave','Submit leave if needed'),
+              ('expenses','Prepare expenses'),('requestdesk','Open a service request'),
+              ('inbox','Review notifications'))},
+    {'key':'performance-growth','title':'Performance and growth','description':'Navigate goals, one-to-ones and development.',
+     'steps':(('performance','Review performance goals'),('checkins','Prepare a one-to-one'),
+              ('growthplans','Review a development plan'),('training','Find learning resources'),
+              ('reviewprogress','Check review progress'))},
+    {'key':'departing-employee','title':'Offboarding coordination','description':'Coordinate the formal exit workflow without deleting history.',
+     'steps':(('offboarding','Start the authorized offboarding process'),('assets','Review asset return'),
+              ('documents','Review exit documents'),('accounts','Follow account deactivation controls'),
+              ('audit','Review the permitted audit trail'))},
+    {'key':'operations-review','title':'HR administration review','description':'Find administrative configuration and health checks.',
+     'steps':(('settingscenter','Locate HRM settings'),('orgsettings','Review organization preferences'),
+              ('dataquality','Review data quality'),('reports','Open reports'),
+              ('readiness','Check operational readiness'))},
+)
+
+
+class FeatureCommandPreviewIn(BaseModel):
+    command: str = Field(min_length=2, max_length=400)
+    feature_key: str = Field(default='', max_length=90)
+
+
+def _feature_command_parts(command: str) -> tuple[str, str] | None:
+    """Extract an explicit user intent; do not interpret arbitrary questions as CRUD."""
+    value = re.sub(r'\s+', ' ', command.strip()).strip(' .!?')
+    patterns = (
+        (r'(?:please )?(?:how (?:do|can) i )?(?:open|go to|navigate to|launch|switch to) (.+)', 'open'),
+        (r'(?:please )?(?:how (?:do|can) i )?(?:create|add|start) (.+)', 'create'),
+        (r'(?:please )?(?:how (?:do|can) i )?(?:edit|update|change|modify) (.+)', 'edit'),
+        (r'(?:please )?(?:how (?:do|can) i )?(?:delete|remove) (.+)', 'delete'),
+        (r'(?:please )?(?:how (?:do|can) i )?(?:view|show|find|see|list) (.+)', 'view'),
+        (r'(?:please )?(?:how (?:do|can) i )?(?:configure|set up|settings for|settings of|change settings for) (.+)', 'settings'),
+        (r'(?:please )?(?:how (?:do|can) i )?(?:help with|use|work with) (.+)', 'help'),
+    )
+    for pattern, intent in patterns:
+        match = re.fullmatch(pattern, value, re.I)
+        if match:
+            subject = re.sub(r'^(?:the|my|our|a|an)\s+', '', match.group(1).strip(), flags=re.I)
+            subject = re.sub(r'\s+(?:feature|page|screen|module|record|records|settings)$', '', subject, flags=re.I)
+            if subject:
+                return intent, subject[:200]
+    return None
+
+
+def _command_matches(subject: str, user: dict, context_key: str = '') -> list[dict]:
+    query = subject.lower().strip()
+    query_terms = set(terms(query))
+    rows = [row for row in catalog() if permitted(row,user)]
+    scored = []
+    for row in rows:
+        key = row['feature_key'].lower()
+        title = row['feature_name'].lower()
+        score = 0.0
+        if query in (key, title):
+            score = 100
+        elif query in title and len(query)>=4:
+            score = 50
+        elif title in query and len(title)>=5:
+            score = 40
+        elif key in query and len(key)>=5:
+            score = 35
+        elif query_terms:
+            matched = query_terms & (set(terms(title)) | set(terms(key)))
+            if matched:
+                score = 12*len(matched)/len(query_terms)
+        if score and key == context_key:
+            score += 2
+        if score:
+            scored.append((score,row))
+    scored.sort(key=lambda x:(-x[0],x[1]['feature_name']))
+    if not scored:
+        return []
+    # Never silently choose a similar but different screen if multiple matches tie.
+    best = scored[0][0]
+    return [row for score,row in scored if score >= max(best*.80,best-10)][:5]
+
+
+def _safe_plan(row: dict, intent: str, user: dict) -> dict:
+    planned = feature_control_plan(FeaturePlanIn(feature_key=row['feature_key'], intent=intent), user)
+    return {'feature_key':row['feature_key'], 'feature':row['feature_name'], 'intent':intent,
+            'target_key':planned['target_key'], 'target_url':planned['target_url'],
+            'declared_api_methods':planned['declared_api_methods'],
+            'guidance':planned['guidance'], 'approved_actions':planned['approved_actions'],
+            'executed':False, 'requires_confirmation':planned['requires_confirmation']}
+
+
+@app.post('/api/ai/copilot/commands/preview')
+def preview_feature_command(body: FeatureCommandPreviewIn, user=Depends(current_user)):
+    """Plan operations for any catalog feature; never proxies SQL or HTTP mutations."""
+    parts = _feature_command_parts(body.command)
+    if not parts:
+        return {'status':'unrecognized', 'intent':'help', 'plans':[],
+                'message':'Try a command such as Edit Employee HRIS, Open Attendance or Settings for Payroll workbench.',
+                'executed':False}
+    intent, subject = parts
+    rows = _command_matches(subject,user,body.feature_key)
+    if not rows:
+        return {'status':'not_found','intent':intent,'plans':[],
+                'message':'No matching feature is available to your account. Search All features for the authorized screen.',
+                'executed':False}
+    plans = [_safe_plan(row,intent,user) for row in rows]
+    return {'status':'matched' if len(plans)==1 else 'ambiguous', 'intent':intent,
+            'plans':plans, 'message':('Open the authorized screen or review one of its explicitly approved AI actions.'
+                                     if len(plans)==1 else 'Several permitted features match; choose the intended one.'),
+            'executed':False}
+
+
+@app.get('/api/ai/copilot/workflows')
+def feature_workflows(user=Depends(current_user)):
+    """Multi-module workflow guides. Filter every step before returning names/URLs."""
+    visible = {row['feature_key']:row for row in catalog() if permitted(row,user)}
+    flows = []
+    for recipe in WORKFLOW_RECIPES:
+        steps = []
+        for feature_key, guidance in recipe['steps']:
+            row = visible.get(feature_key)
+            if not row:
+                continue
+            steps.append({'feature_key':feature_key, 'feature':row['feature_name'],
+                          'url':row['feature_url'], 'guidance':guidance,
+                          'actions':[{'operation':op,'label':meta['label']} for op,meta in ACTION_CATALOG.items()
+                                     if meta['feature']==feature_key and allowed_action(op,user)]})
+        if len(steps)>=2:
+            flows.append({'key':recipe['key'],'title':recipe['title'],'description':recipe['description'],
+                          'steps':steps, 'guide_only':True})
+    return {'workflows':flows, 'note':'Workflow steps are linked, not autonomously executed. Existing HRM screens enforce final permissions.'}
+
+
+async def answer_question(body: AskBody, user: dict):
     question = body.message.strip()
     agent = validated_agent(user, body.agent)
     lower = question.lower()
@@ -940,9 +1475,31 @@ async def ask(body: AskBody, user=Depends(current_user)):
         return {'answer':'Several features match. Choose the correct authorized screen below.', 'sources':[],
                 'features':[{'key':r['feature_key'],'label':r['feature_name'],'url':r['feature_url']} for r in matches],
                 'actions':[], 'mode':'feature-choices'}
+    # An explicit request to perform a reviewed action takes precedence over
+    # generic "my calendar"/"my task" lookups, but never performs the action.
+    reviewed = suggest_reviewed_action(question, user)
+    if reviewed:
+        return reviewed
+    if is_pending_summary_query(question):
+        return pending_response(user)
     own = self_lookup(user, question)
     if own:
         return {**own, 'features': []}
+    # Explicit feature-wide commands can guide Create/Edit/Delete/Settings on
+    # every permitted screen, without pretending that source routes prove CRUD.
+    if _feature_command_parts(question):
+        command_plan = preview_feature_command(
+            FeatureCommandPreviewIn(command=question, feature_key=body.feature_key or ''), user)
+        if command_plan['status'] in ('matched','ambiguous'):
+            plans = command_plan['plans']
+            direct = plans[0]['approved_actions'] if len(plans)==1 else []
+            note = plans[0]['guidance'] if len(plans)==1 else command_plan['message']
+            return {'answer':(f'{plans[0]["feature"]}: {note}' if len(plans)==1 else note)
+                    + ' No changes have been made.', 'sources':[],
+                    'features':[{'key':p['target_key'],'label':p['feature'],
+                                 'url':p['target_url']} for p in plans],
+                    'actions':[{'operation':a['operation'],'label':a['label']} for a in direct],
+                    'mode':'feature-plan', 'executed':False}
     context = next((row for row in catalog() if row['feature_key'] == body.feature_key and permitted(row,user)), None) if body.feature_key else None
     # Short or deictic questions can be grounded to the HRM feature the user is actually viewing.
     deictic = ('this page','this feature','on this screen','this module','do here','use this','current page')
@@ -954,13 +1511,13 @@ async def ask(body: AskBody, user=Depends(current_user)):
     if agent_domains and not contextual:
         relevant_keys = {row['feature_key'] for row in catalog() if row['domain'] in agent_domains and permitted(row, user)}
         narrowed = [doc for doc in accessible_docs if doc['kind'] != 'feature' or doc['id'] in relevant_keys]
-        picked = rank(grounded_query, narrowed, 6)
+        picked = diverse_rank(grounded_query, narrowed, 6)
     else:
-        picked = rank(grounded_query, accessible_docs, 6)
+        picked = diverse_rank(grounded_query, accessible_docs, 6)
     # General, non-company questions can be answered by GenAI without a RAG match.
     # Unknown company policy is not equivalent to an open-domain question.
     if not picked or (not provider_ready() and re.search(r'^\s*(hi|hello|hey|good (morning|evening|afternoon)|what is (rag|hrms|genai|generative ai|ats))\b', question, re.I) and not company_specific(question)):
-        answer = None if company_specific(question) else await generate_with_evidence(question, [], agent, allow_general=True)
+        answer = None if company_specific(question) else await generate_with_evidence(question, [], agent, allow_general=True, recent_turns=body.recent_turns)
         return {'answer': answer or offline_answer(question, agent), 'sources': [], 'features': [],
                 'actions': [], 'mode': 'generated-general' if answer else 'assistant-fallback'}
     safe_sources = [{'kind': s['kind'], 'title': s['title'], 'url': s['url'], 'id': s['id'],
@@ -984,11 +1541,11 @@ async def ask(body: AskBody, user=Depends(current_user)):
     general_prompt = (not company_specific(question) and not verified_docs and not restricted and not contextual
                       and re.match(r'^\s*(what is|what are|explain|how does|why does|give me|define)\b', question, re.I))
     if general_prompt:
-        general_answer = await generate_with_evidence(question, [], agent, allow_general=True)
+        general_answer = await generate_with_evidence(question, [], agent, allow_general=True, recent_turns=body.recent_turns)
         if general_answer:
             return {'answer': general_answer, 'sources': [], 'features': feature_matches,
                     'actions': action_suggestions, 'mode': 'generated-general'}
-    answer = None if restricted else await generate_with_evidence(question, picked, agent)
+    answer = None if restricted else await generate_with_evidence(question, picked, agent, recent_turns=body.recent_turns)
     if answer:
         return {'answer': answer, 'sources': safe_sources, 'features': feature_matches, 'actions': action_suggestions, 'mode': 'generated-rag'}
     top = picked[0]
@@ -1000,6 +1557,205 @@ async def ask(body: AskBody, user=Depends(current_user)):
     else:
         answer = f'From the approved {top["kind"]} “{top["title"]}”: {top["text"][:650]}'
     return {'answer': answer, 'sources': safe_sources, 'features': feature_matches, 'actions': action_suggestions, 'mode': 'retrieved-rag'}
+
+
+
+# A short-lived opaque-to-the-UI pointer, not a chat transcript. A separate
+# issuer and audience prevent using it as a login token. Every follow-up
+# rechecks access and reads the current record or published source.
+CONTEXT_ISSUER = 'sass-hrm-copilot-context'
+CONTEXT_AUDIENCE = 'sass-hrm-copilot-followup'
+OWN_FOLLOWUPS = {
+    '/compensation/leave-management': 'my leave balance',
+    '/compensation/time-attendance': 'my attendance today',
+    '/talent/request-desk': 'my service request status',
+    '/workspace/my-profile': 'my department',
+    '/talent/hr-tasks': 'my tasks',
+    '/culture/performance-goals': 'my goals',
+    '/talent/learning-training': 'my training',
+    '/compensation/benefits-programs': 'my benefits',
+    '/talent/hr-helpdesk': 'my helpdesk tickets',
+    '/compensation/expenses-claims': 'my expenses',
+    '/services/asset-management': 'my assets',
+    '/compensation/project-timesheets': 'my timesheets',
+    '/people/skills-competencies': 'my skills',
+    '/talent/onboarding': 'my onboarding',
+    '/culture/career-development': 'my career plan',
+    '/culture/work-arrangements': 'my work arrangement',
+    '/compensation/attendance-corrections': 'my attendance correction',
+    '/workspace/calendar': 'my calendar',
+    '/services/secure-document-vault': 'my document vault',
+    '/people/policy-acknowledgements': 'my policy acknowledgements',
+}
+FOLLOWUPS = {
+    'refresh': r'(?:check|show|read|refresh|repeat|summari[sz]e|explain) (?:it|that|this|the (?:answer|result|source))(?: again| briefly)?|check again|say that again|check the latest|make it shorter|can you (?:check again|explain that|summari[sz]e that)',
+    'open': r'(?:please )?(?:open|take me to|show me) (?:it|that|this|the (?:source|module|page|screen))|where (?:can i see|do i find) (?:it|that|this)',
+    'next': r'(?:what(?: should i do| do i do| is)? next|next step|what can i do about (?:it|that)|how do i follow up)(?: please)?',
+}
+
+
+def register_response(kind: str, show_counts: bool, user: dict) -> dict:
+    if user['role'] != 'admin':
+        return {'answer':'The product catalog and project register are available to HR administrators only.',
+                'sources':[], 'features':[], 'actions':[], 'mode':'guardrail', 'executed':False}
+    label = 'Product catalog' if kind == 'products' else 'Project register'
+    link = {'key':kind,'label':label,'url':f'/services/{kind}'}
+    answer = f'Open the {label.lower()} to view or manage records. No changes were made.'
+    if show_counts:
+        with db() as c:
+            counts = rows(c.execute('SELECT status, COUNT(*) AS total FROM hrm_work_catalog WHERE kind=? AND archived_at IS NULL GROUP BY status', (kind,)))
+        if counts:
+            parts = ', '.join(f"{r['status']}: {r['total']}" for r in sorted(counts, key=lambda r: r['status']))
+            answer = f'{label}: {sum(r["total"] for r in counts)} visible records ({parts}).'
+        else:
+            answer = f'{label}: no records in the register.'
+    return {'answer':answer, 'sources':[{'kind':'organization_record','title':label,'url':link['url']}] if show_counts else [],
+            'features':[link], 'actions':[], 'mode':'register-summary' if show_counts else 'feature-command','executed':False}
+
+
+def conversation_pointer(result: dict) -> dict | None:
+    mode = result.get('mode')
+    keys = [f['key'] for f in result.get('features', [])]
+    if mode in ('register-summary','feature-command') and len(keys)==1 and keys[0] in ('products','projects'):
+        return {'kind':'register','id':keys[0]}
+    if mode == 'data-backed':
+        if 'snapshot' in result:
+            return {'kind':'pending', 'id':'pending'}
+        path = next((source.get('url') for source in result.get('sources', []) if source.get('kind') == 'own_record'), None)
+        if path in OWN_FOLLOWUPS:
+            return {'kind':'own', 'id':path}
+    if mode in ('generated-rag','retrieved-rag'):
+        source = next((item for item in result.get('sources', []) if item.get('kind') in ('policy','knowledge') and item.get('id') is not None), None)
+        if source:
+            return {'kind':source['kind'], 'id':str(source['id'])}
+    if mode in ('feature-command','feature-plan','retrieved-rag','action-guidance') and len(result.get('features', [])) == 1:
+        return {'kind':'feature', 'id':str(result['features'][0]['key'])}
+    return None
+
+
+def context_response(result: dict, user: dict, pointer: dict | None = None) -> dict:
+    pointer = pointer or conversation_pointer(result)
+    if pointer:
+        result['conversation_context'] = jwt.encode(
+            {**pointer, 'sub':str(user['id']), 'ver':user['session_version'], 'role':user['role'],
+             'iss':CONTEXT_ISSUER, 'aud':CONTEXT_AUDIENCE, 'exp':datetime.now(timezone.utc)+timedelta(minutes=30)},
+            JWT_SECRET, algorithm='HS256')
+        result['followups'] = ['Check again', 'Open the source', 'What next?']
+    return result
+
+
+def read_context(token: str | None, user: dict) -> dict | None:
+    if not token:
+        return None
+    try:
+        value = jwt.decode(token, JWT_SECRET, algorithms=['HS256'], issuer=CONTEXT_ISSUER, audience=CONTEXT_AUDIENCE,
+                           options={'require':['sub','exp','aud','iss']})
+        if (value['sub'],value.get('ver'),value.get('role')) == (str(user['id']),user['session_version'],user['role']):
+            return value
+    except jwt.PyJWTError:
+        pass
+    return None
+
+
+def continue_locally(pointer: dict, intent: str, user: dict) -> dict | None:
+    kind, key = pointer.get('kind'), pointer.get('id')
+    if kind == 'register' and key in ('products','projects') and user['role']=='admin':
+        return context_response(register_response(key,intent=='refresh',user),user,{'kind':kind,'id':key})
+    if kind == 'pending' and key == 'pending':
+        result = pending_response(user)
+        result['features'] = [{'key':'selfservice','label':'My requests & shortcuts','url':'/workspace/my-requests'}]
+    elif kind == 'own' and key in OWN_FOLLOWUPS:
+        result = self_lookup(user, OWN_FOLLOWUPS[key])
+        if not result:
+            return None
+        result.update({'features':[], 'actions':[], 'executed':False})
+    elif kind == 'feature':
+        row = next((x for x in catalog() if x['feature_key']==key and permitted(x,user)), None)
+        if not row:
+            return None
+        result = {'answer':f'Open {row["feature_name"]} to review the available options for your role.',
+                  'sources':[], 'features':[{'key':key,'label':row['feature_name'],'url':row['feature_url']}],
+                  'mode':'feature-command', 'actions':[], 'executed':False}
+    elif kind in ('knowledge','policy'):
+        doc = next((x for x in evidence(user) if x['kind']==kind and str(x['id'])==key), None)
+        if not doc:
+            return None
+        result = {'answer':f'From the approved {kind} “{doc["title"]}”: {doc["text"][:650]}',
+                  'sources':[{'kind':kind,'id':key,'title':doc['title'],'url':doc['url'],'excerpt':doc['text'][:320]}],
+                  'features':[], 'mode':'retrieved-rag', 'actions':[], 'executed':False}
+    else:
+        return None
+    if intent in ('open','next') and kind != 'feature':
+        if intent == 'open':
+            result['answer'] = 'Use the source or module link below to open the authorized HRM screen.'
+        else:
+            result['answer'] = 'Open the source below, review the current details, then use that module’s available controls or ask HR for guidance. Nothing has been changed.'
+    return context_response(result,user,{'kind':kind,'id':key})
+
+
+@app.post('/api/ai/copilot/ask')
+async def ask(body: AskBody, user=Depends(current_user)):
+    normalized = body.message.strip().casefold().rstrip('?.!').strip()
+    intent = next((key for key, pattern in FOLLOWUPS.items() if re.fullmatch(pattern,normalized)),None)
+    if intent and body.conversation_context:
+        pointer = read_context(body.conversation_context,user)
+        result = continue_locally(pointer,intent,user) if pointer else None
+        return result or {'answer':'I can’t reopen that context. Ask your question again so I can check what is currently available to you.',
+                          'sources':[], 'features':[], 'actions':[], 'mode':'assistant-fallback','executed':False}
+    register = re.fullmatch(r'(open|show|list|summari[sz]e|count|go to) (?:the )?(products|product catalog|projects|project register)(?: please)?',normalized)
+    if register:
+        verb, target = register.groups()
+        kind = 'products' if target in ('products','product catalog') else 'projects'
+        return context_response(register_response(kind,verb not in ('open','go to'),user),user)
+    return context_response(await answer_question(body,user),user)
+
+@app.get('/api/ai/copilot/my-pending')
+def my_pending(user=Depends(current_user)):
+    return pending_snapshot(user)
+
+
+@app.post('/api/ai/copilot/knowledge/bulk/preview')
+def knowledge_bulk_preview(body: KnowledgeBatch, user=Depends(require_hr)):
+    rows = normalized_knowledge_batch(body.rows)
+    with db() as c:
+        assert_knowledge_not_duplicated(c, rows)
+    timestamp = int(datetime.now(timezone.utc).timestamp())
+    return {'count': len(rows), 'status': 'Draft', 'requires_confirmation': True,
+            'preview_token': _knowledge_preview_token(rows, user['id'], timestamp),
+            'items': [{'title': item['title'], 'feature_key': item['feature_key'],
+                       'audience': item['audience']} for item in rows]}
+
+
+@app.post('/api/ai/copilot/knowledge/bulk/import', status_code=201)
+def knowledge_bulk_import(body: KnowledgeBatchConfirm, user=Depends(require_hr)):
+    rows = normalized_knowledge_batch(body.rows)
+    try:
+        timestamp_part, digest = body.preview_token.split('.', 1)
+        timestamp = int(timestamp_part)
+    except (ValueError, TypeError):
+        raise HTTPException(403, 'Invalid knowledge import preview')
+    now_ts = int(datetime.now(timezone.utc).timestamp())
+    if timestamp > now_ts + 5 or now_ts - timestamp > 600:
+        raise HTTPException(409, 'Knowledge preview expired; review the file again')
+    expected = _knowledge_preview_token(rows, user['id'], timestamp)
+    if not hmac.compare_digest(expected, body.preview_token):
+        raise HTTPException(403, 'Knowledge import no longer matches the reviewed content')
+    now = utcnow()
+    inserted = []
+    with db() as c:
+        assert_knowledge_not_duplicated(c, rows)
+        for item in rows:
+            cur = c.execute('''INSERT INTO ai_knowledge_articles
+                (title,category,content,status,created_by,created_at,updated_at)
+                VALUES(?,?,?,'Draft',?,?,?)''',
+                (item['title'], item['category'], item['content'], user['id'], now, now))
+            c.execute('''INSERT INTO ai_knowledge_scopes(article_id,feature_key,audience)
+                         VALUES(?,?,?)''', (cur.lastrowid, item['feature_key'], item['audience']))
+            inserted.append(cur.lastrowid)
+        audit(c, user['id'], 'ai.knowledge.bulk_import', 'ai_knowledge_articles',
+              f'count={len(inserted)};status=Draft')
+    return {'created': len(inserted), 'status': 'Draft', 'article_ids': inserted,
+            'message': 'Imported as drafts. Publish reviewed articles individually.'}
 
 
 @app.get('/api/ai/copilot/knowledge')

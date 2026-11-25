@@ -119,7 +119,8 @@ def init_db():
         if 'work_email' not in [x['name'] for x in c.execute('PRAGMA table_info(employees)').fetchall()]:
             c.execute('ALTER TABLE employees ADD COLUMN work_email TEXT')
         c.execute("UPDATE employees SET work_email=lower(email) WHERE work_email IS NULL OR trim(work_email)=''")
-        c.execute('CREATE UNIQUE INDEX IF NOT EXISTS ux_employees_work_email ON employees(work_email)')
+        if DB_ENGINE != 'mysql':
+            c.execute('CREATE UNIQUE INDEX IF NOT EXISTS ux_employees_work_email ON employees(work_email)')
         c.execute('''CREATE TABLE IF NOT EXISTS developer_grants (
             employee_id INTEGER PRIMARY KEY, enabled INTEGER NOT NULL DEFAULT 1,
             granted_at TEXT NOT NULL, FOREIGN KEY(employee_id) REFERENCES employees(id))''')
@@ -205,10 +206,35 @@ def require_manager(user=Depends(current_user)):
         raise HTTPException(403,'Manager or HR admin only')
     return user
 
+@app.get('/api/live')
+def liveness():
+    """Process-only health check. No database I/O, credentials, or private data."""
+    return {'status': 'alive', 'service': 'SASS HRM API'}
+
+
 @app.get('/api/health')
 def health():
-    with db() as c:
-        c.execute('SELECT 1').fetchone()
+    """Read-only database reachability. Never attempts schema installation."""
+    try:
+        if DB_ENGINE == 'mysql':
+            # The normal db() wrapper may perform additive schema installation on
+            # first use. A health probe must not change the production database.
+            from mysql_backend import raw_mysql_connection
+            conn = raw_mysql_connection()
+            try:
+                with conn.cursor() as cursor:
+                    cursor.execute('SELECT 1')
+                    cursor.fetchone()
+            finally:
+                conn.close()
+        else:
+            with db() as conn:
+                conn.execute('SELECT 1').fetchone()
+    except Exception as exc:
+        # Do not return SQL exception details, hosts, usernames or passwords.
+        import logging
+        logging.getLogger(__name__).warning('HRM database health check failed (%s)', type(exc).__name__)
+        raise HTTPException(status_code=503, detail='HRM database unavailable; check the backend logs and database connection') from exc
     return {'status':'ok','service':'SASS HRM — SASS INNOVATIONS ENTERPRISE','version':app.version,'database':DB_ENGINE}
 
 @app.get('/api/ready')
@@ -758,3 +784,6 @@ import ai_copilot  # noqa: E402,F401
 
 # Permission-scoped Excel export, admin-only vetted master imports and feature operation directory.
 import module_excel_center  # noqa: E402,F401
+
+import service_center  # noqa: E402,F401 - consolidated case queue
+import work_catalog  # noqa: E402,F401 - product catalog and project register

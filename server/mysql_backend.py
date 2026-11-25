@@ -114,6 +114,8 @@ def install_schema(connection):
                 cur.execute('INSERT IGNORE INTO schema_migrations(version,description,applied_at) VALUES(%s,%s,%s)',
                             (32,'Additive operational evidence foundations: 20 tables',datetime.now(timezone.utc).isoformat()))
                 cur.execute('INSERT IGNORE INTO schema_migrations(version,description,applied_at) VALUES(%s,%s,%s)',
+                            (33,'Administrator product catalog and project register',datetime.now(timezone.utc).isoformat()))
+                cur.execute('INSERT IGNORE INTO schema_migrations(version,description,applied_at) VALUES(%s,%s,%s)',
                             (1,'Initial full HRMS schema',datetime.now(timezone.utc).isoformat()))
                 cur.execute('INSERT IGNORE INTO schema_migrations(version,description,applied_at) VALUES(%s,%s,%s)',
                             (2,'Additive Talent Operations v1.7 schema',datetime.now(timezone.utc).isoformat()))
@@ -213,28 +215,6 @@ class MySQLCompatConnection:
                             (pragma.group(1),))
                 records=cur.fetchall()
                 return BufferedResult(records,rowcount=len(records))
-        create_index=re.match(
-            r'^\s*CREATE\s+(?:UNIQUE\s+)?INDEX\s+IF\s+NOT\s+EXISTS\s+(\w+)\s+ON\s+(\w+)',
-            sql,re.I,
-        )
-        if create_index:
-            index_name, table_name=create_index.groups()
-            with self.raw.cursor() as cur:
-                cur.execute(
-                    'SELECT 1 FROM information_schema.statistics '
-                    'WHERE table_schema=DATABASE() AND table_name=%s AND index_name=%s LIMIT 1',
-                    (table_name,index_name),
-                )
-                if cur.fetchone():
-                    return BufferedResult()
-                cur.execute(rewrite_sql(re.sub(
-                    r'\bIF\s+NOT\s+EXISTS\s+',
-                    '',
-                    sql,
-                    count=1,
-                    flags=re.I,
-                )),tuple(params))
-                return BufferedResult(cur.fetchall() if cur.description else (),cur.lastrowid,cur.rowcount)
         with self.raw.cursor() as cur:
             try:
                 cur.execute(rewrite_sql(sql),tuple(params))

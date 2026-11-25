@@ -42,3 +42,54 @@
 .sass-ai-agent-switch label{font-size:11px;font-weight:750;color:#435374}
 .sass-ai-agent-switch select{max-width:100%;min-width:0;flex:1 1 165px;border-radius:8px;border:1px solid #d4ddf0;padding:7px 9px;color:#344263;background:white;font-size:11px}
 .sass-ai-agent-switch small{width:100%;color:#71809a;font-size:10px;line-height:1.5}
+
+/* V5: small, keyboard-accessible answer actions; the floating window remains non-modal. */
+.sass-ai-copy{display:inline-flex;align-items:center;gap:4px;border:1px solid #dce2f0;border-radius:6px;padding:4px 7px;margin-top:10px;background:#fff;color:#5862b7;font-size:10px;cursor:pointer}
+.sass-ai-copy:focus-visible,.sass-ai-suggestions button:focus-visible{outline:2px solid #5862d5;outline-offset:2px}
+@media(prefers-reduced-motion:reduce){.sass-ai-thread{scroll-behavior:auto}}
+
+/* V6: accessible transcript and retry tools remain inside the floating chat. */
+.sass-ai-chat-tools{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.sass-ai-chat-tools button{border:1px solid #dde3f1;border-radius:7px;background:white;color:#4d5c9b;padding:6px 8px;font-size:10px;cursor:pointer}
+.sass-ai-chat-tools button:focus-visible,.sass-ai-alert button:focus-visible{outline:2px solid #5862d5;outline-offset:2px}
+.sass-ai-alert.error{flex-wrap:wrap}.sass-ai-alert.error>span{flex:1 1 170px}
+.sass-ai-alert.error button:not([aria-label]){border:1px solid #e8a5af;border-radius:7px;padding:5px 9px;background:#fff8f8;color:#943246;cursor:pointer}
+@media(max-width:480px){.sass-ai-chat-tools{justify-content:flex-end}.sass-ai-chat-head{flex-wrap:wrap}}
+
+/* v7: reviewed, draft-only RAG bulk import and employee pending-work shortcut. */
+.sass-ai-bulk-import{margin-top:24px;border-top:1px solid #e3e8f3;padding-top:18px;display:flex;flex-direction:column;align-items:start;gap:12px}
+.sass-ai-bulk-import>strong{font-size:13px;color:#33446b}
+.sass-ai-bulk-import>p{font-size:11px;color:#6d7b91;line-height:1.6;margin:0}
+.sass-ai-bulk-import>label{display:grid;gap:8px;width:100%;font-size:11px;color:#4a5876;font-weight:700}
+.sass-ai-bulk-import input[type=file]{width:100%;font-size:11px;border:1px solid #dfe5f1;border-radius:8px;padding:9px}
+.sass-ai-bulk-import button{border:1px solid #cfd7eb;border-radius:8px;background:white;color:#505ab3;padding:8px 11px;font-size:11px;font-weight:750}
+.sass-ai-bulk-import .sass-ai-primary{background:#5862d5;color:#fff;border-color:#5862d5}
+.sass-ai-bulk-preview{width:100%;background:#f7f9ff;border:1px solid #dbe2f4;border-radius:10px;padding:13px}
+.sass-ai-bulk-preview>strong{font-size:12px}
+.sass-ai-bulk-preview ul{padding-left:18px;color:#566481;font-size:11px;line-height:1.8}
+.sass-ai-bulk-preview>div{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.sass-ai-suggestions .sass-ai-pending-shortcut{background:#eef1ff;border-color:#cdd4fb;color:#3744ab;font-weight:800}
+
+/* v8: universal feature command preview and role-scoped multi-module workflow guides. */
+.sass-ai-workflow-center{display:grid;gap:12px;min-width:0}.sass-ai-workflow-center>h3{font-size:16px;margin:10px 0 0}.sass-ai-workflow-center>p{font-size:12px;color:#66748f;line-height:1.6;margin:0}
+.sass-ai-command-form{display:grid;gap:7px;margin:10px 0}.sass-ai-command-form>label{font-size:12px;font-weight:750}.sass-ai-command-form>div{display:flex;gap:8px;flex-wrap:wrap}.sass-ai-command-form input{flex:1 1 200px;min-width:0;border:1px solid #d1dbef;border-radius:8px;padding:10px;font-size:12px}.sass-ai-command-form button,.sass-ai-workflow-buttons button{border:1px solid #ccd3ec;background:#f5f6ff;color:#3947a0;border-radius:8px;padding:8px 10px;font-size:11px;font-weight:750;cursor:pointer}
+.sass-ai-command-examples{display:flex;gap:6px;flex-wrap:wrap}.sass-ai-command-examples button{background:white;border:1px solid #e0e5f2;color:#667293;border-radius:6px;padding:6px 8px;font-size:10px;cursor:pointer}
+.sass-ai-command-result,.sass-ai-workflow-steps{border:1px solid #dce1f1;background:#fbfcff;border-radius:10px;padding:14px;min-width:0}.sass-ai-command-result>strong{font-size:12px}.sass-ai-command-result>p,.sass-ai-command-plan p,.sass-ai-workflow-steps>p{font-size:11px;line-height:1.65;color:#64718c}.sass-ai-command-plan{border-top:1px solid #e6ebf4;margin-top:12px;padding-top:12px}.sass-ai-command-plan>strong{font-size:12px}.sass-ai-command-plan>small{display:block;font-size:10px;color:#63718a;margin-bottom:8px}
+.sass-ai-workflow-buttons{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}.sass-ai-workflow-buttons button{display:inline-flex;align-items:center;gap:3px}
+.sass-ai-workflow-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}.sass-ai-workflow-grid>button{text-align:left;background:white;border:1px solid #dce2f1;border-radius:9px;padding:11px;cursor:pointer}.sass-ai-workflow-grid>button.selected{border-color:#6571db;background:#f3f4ff}.sass-ai-workflow-grid strong,.sass-ai-workflow-grid small{display:block}.sass-ai-workflow-grid strong{font-size:12px;margin-bottom:5px}.sass-ai-workflow-grid small{font-size:10px;color:#6b7790;line-height:1.6}
+.sass-ai-workflow-steps h4{font-size:14px;margin:0 0 12px}.sass-ai-workflow-steps ol{padding-left:24px;margin:0}.sass-ai-workflow-steps li{padding:8px 0;border-bottom:1px solid #e8edf4}.sass-ai-workflow-steps li:last-child{border-bottom:0}.sass-ai-workflow-steps label{display:flex;gap:8px;align-items:start}.sass-ai-workflow-steps label input{margin-top:3px}.sass-ai-workflow-steps label strong,.sass-ai-workflow-steps label small{display:block}.sass-ai-workflow-steps label strong{font-size:12px}.sass-ai-workflow-steps label small{font-size:11px;line-height:1.5;color:#697894}.sass-ai-tabs{overflow-x:auto;flex-wrap:nowrap}.sass-ai-tabs button{flex-shrink:0}
+@media(max-width:540px){.sass-ai-workflow-grid{grid-template-columns:1fr}.sass-ai-command-form>div{flex-direction:column}.sass-ai-command-form button{width:100%}}
+
+/* v9: self-only AI action history and administrator catalog editors. */
+.sass-ai-action-history{border:1px solid #e1e6f2;border-radius:9px;background:#fafbff;padding:10px 12px;margin:8px 0 16px;font-size:11px;color:#52617f}
+.sass-ai-action-history button{border:1px solid #cbd4ed;background:white;border-radius:7px;color:#4451ad;padding:7px 10px;font-size:11px;cursor:pointer}
+.sass-ai-action-history>div{max-height:190px;overflow-y:auto;padding:8px 0 2px}
+.sass-ai-action-history strong{font-weight:750;margin-right:12px}
+.sass-ai-action-history ul{padding-left:19px;line-height:1.8;overflow-wrap:anywhere}
+.sass-ai-action-history button:focus-visible{outline:2px solid #5862d5;outline-offset:2px}
+.sass-ai-action-form textarea,.sass-ai-action-form input,.sass-ai-action-form select{max-width:100%}
+
+.sass-ai-followups{display:flex;flex-wrap:wrap;gap:7px;padding:10px 14px;border-top:1px solid #edf0f7}
+.sass-ai-followups button{border:1px solid var(--brand-blue-border,#cbd0ff);border-radius:999px;padding:7px 10px;background:var(--brand-blue-wash,#eef0ff);color:var(--brand-blue-text,#373ba9);font-size:11px;font-weight:750}
+.sass-ai-followups button:hover{background:#e4e7ff}
+.sass-ai-chat-tools button:disabled{cursor:not-allowed}

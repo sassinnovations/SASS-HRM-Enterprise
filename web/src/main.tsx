@@ -2,6 +2,9 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './style.css';
+import './enterprise-white.css';
+import './botanical-white.css';
+import './sign-in-blue.css';
 
 /** Show an actionable error screen instead of an empty viewport if React crashes. */
 class AppErrorBoundary extends React.Component<

@@ -10,7 +10,7 @@ from mysql_backend import split_ddl
 
 ROOT=Path(__file__).resolve().parent.parent
 required=get_required_schema()
-assert len(required)==270, f'Expected 270 tables; got {len(required)}'
+assert len(required)==272, f'Expected 272 tables; got {len(required)}'
 assert len({c for cols in required.values() for c in cols})>30
 assert sum(map(len,required.values()))>=640
 assert not source_coverage(required), source_coverage(required)

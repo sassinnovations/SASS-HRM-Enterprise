@@ -21,14 +21,14 @@ canonical = SCHEMA.read_text(encoding='utf-8')
 required, indexes, relations = check_file_package()
 old_sql = canonical.split('-- SASS HRM — SASS INNOVATIONS ENTERPRISE | migration 21', 1)[0].rstrip()
 assert hashlib.sha256((old_sql+'\n').encode()).hexdigest() == previous_schema_sha256, 'Original 243-table DDL changed unexpectedly'
-assert len(required) == 270 and sum(map(len, required.values())) == 2226
-assert len(indexes) == 329 and len(relations) == 504
+assert len(required) == 272 and sum(map(len, required.values())) == 2242
+assert len(indexes) == 331 and len(relations) == 505
 assert SCHEMA.read_bytes() == MANUAL.read_bytes()
 assert len(split_ddl(new)) == 20
 new_tables, new_indexes, new_fk, order = sql_objects(new)
 all_tables, _, _, all_order = sql_objects(canonical)
 assert order == list(OPERATIONS_21_TABLES) == all_order[all_order.index('recruitment_match_runs'):all_order.index('database_verification_runs')]
-assert set(all_tables) - set(new_tables) - {'ai_knowledge_articles','ai_knowledge_scopes','ai_action_proposals','official_work_detail_requests'} - set(sql_objects(VERIFICATION_22_ADD_ONLY.read_text(encoding="utf-8"))[0]) == set(sql_objects(old_sql)[0])
+assert set(all_tables) - set(new_tables) - {'ai_knowledge_articles','ai_knowledge_scopes','ai_action_proposals','official_work_detail_requests','hrm_work_catalog','hrm_work_catalog_settings'} - set(sql_objects(VERIFICATION_22_ADD_ONLY.read_text(encoding="utf-8"))[0]) == set(sql_objects(old_sql)[0])
 assert len(new_indexes) == 41 and len(new_fk) == 50
 assert new_indexes <= indexes and new_fk <= relations
 assert all(new_tables[t] == all_tables[t] for t in order)
@@ -67,5 +67,5 @@ for name, expected_columns in {
 }.items():
     assert expected_columns <= required[name],name
 print('PASS: original 243 table definitions preserved (SHA-256), +20 add-only DDLs')
-print('PASS: 270 tables, 2226 columns, 329 indexes, 504 total FKs; 50 new FK types verified')
+print('PASS: 272 tables, 2242 columns, 331 indexes, 505 total FKs; 50 new FK types verified')
 print('PASS: JD deletion preserved, no seed/data writes, no secret/biometric/resume columns')

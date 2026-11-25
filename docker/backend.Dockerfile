@@ -9,6 +9,7 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 COPY server/ /app/server/
 COPY database/ /app/database/
 COPY docs/FEATURE_SCREEN_DATABASE_CONTRACTS.csv /app/docs/FEATURE_SCREEN_DATABASE_CONTRACTS.csv
+COPY docs/FEATURE_CRUD_ENDPOINT_MATRIX.csv /app/docs/FEATURE_CRUD_ENDPOINT_MATRIX.csv
 WORKDIR /app/server
 RUN groupadd --system sass && useradd --system --gid sass --home-dir /app sass && chown -R sass:sass /app
 USER sass

@@ -36,7 +36,7 @@ def main():
             coverage=client.get('/api/admin/database/feature-coverage',headers=admin)
             assert coverage.status_code==200,coverage.text
             groups=coverage.json()['modules']
-            assert sum(g['required_count'] for g in groups)==270,groups
+            assert sum(g['required_count'] for g in groups)==272,groups
             assert all(g['state']=='not_live_verified' for g in groups)
             saved=client.post('/api/admin/database/verification-runs',headers=admin)
             assert saved.status_code==201,saved.text
@@ -94,6 +94,6 @@ def main():
                 assert c.execute('SELECT job_description_id FROM candidate_shortlist_decisions WHERE candidate_id=?',(candidate_id,)).fetchone()['job_description_id'] is None
                 actions={r['action'] for r in c.execute('SELECT action FROM audit_events').fetchall()}
                 assert {'database.verification.saved','recruitment.match.saved','recruitment.match.reviewed','recruitment.shortlist.reviewed'} <= actions
-    print('PASS: admin-only database reports, 270-table feature inventory, saved ATS run, human review, shortlist and JD deletion with candidates intact')
+    print('PASS: admin-only database reports, 272-table feature inventory, saved ATS run, human review, shortlist and JD deletion with candidates intact')
 
 if __name__=='__main__':main()

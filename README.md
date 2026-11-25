@@ -1,3 +1,21 @@
+## Service Center Plus release
+
+See [what changed, how it was tested, and staging instructions](SERVICE_CENTER_PLUS_RELEASE_NOTES.md).
+
+---
+
+## Consolidation release (based on V9)
+
+See [Consolidation release notes](CONSOLIDATION_RELEASE_NOTES.md) for the new HR Service Center, Recruitment Workspace, verification and safe deployment steps. No database migration is required for these changes.
+
+---
+
+## 25 November 2026 — Floating AI icon and window
+
+The SASS AI Copilot is now launched from a floating robot icon at the bottom-right of the HRM workspace. Its chat window is non-modal (no overlay/backdrop), desktop-draggable, keyboard-positionable, resizable, expandable and minimizable. The left sidebar and main HRM layout never shrink to make room for the bot. Chat and unfinished forms remain mounted while the window is minimized or while navigating features. Existing GenAI/RAG and confirmed HRM action APIs remain unchanged. See `AI_FLOATING_WINDOW_RELEASE_GUIDE.md` and run `CHECK_AI_FLOATING_BOT.bat` for source-level tests. Full frontend build and browser deployment still require verification.
+
+---
+
 # SASS HRM — SASS INNOVATIONS ENTERPRISE
 
 **24 November 2026 — AI Control Center v2:** The original AI Copilot now provides 73 role-filtered feature guides, nine confirmed and audited own-record operations, published-source lexical RAG, optional external GenAI, personal calendar CRUD and AI admin health monitoring. All other HRM edits/deletes remain in their own permission-checked modules. See [v2 source guide](docs/SASS_AI_COPILOT_GENAI_RAG_INSTALL.md) and [73-feature capability matrix](docs/AI_COPILOT_FEATURE_CONTROL_MATRIX_2026-11-24.csv). No live MySQL, external LLM or complete frontend build was verified.

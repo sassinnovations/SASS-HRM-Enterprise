@@ -214,7 +214,7 @@ with tempfile.TemporaryDirectory() as tmp:
         assert get('/ai/copilot/health', a).status_code == 403
         health = get('/ai/copilot/health', admin)
         assert health.status_code == 200, health.text
-        assert health.json()['inventoried_features'] == 73 and health.json()['confirmed_action_types'] == 16
+        assert health.json()['inventoried_features'] == 73 and health.json()['confirmed_action_types'] == 31
         assert health.json()['vector_search_enabled'] is False and health.json()['private_records_sent_to_llm'] is False
         options_a = get('/ai/copilot/actions/my-options', a).json()
         assert options_a['personal_events']==[] and options_a['pending_work_mode']==[] and options_a['pending_corrections']==[] and options_a['assignable_staff']==[], options_a

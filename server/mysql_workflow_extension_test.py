@@ -9,10 +9,10 @@ from mysql_feature_schema_integrity import (
 from schema_audit import get_required_schema
 
 required, indexes, relations = check_file_package()
-assert len(required) == 270
-assert sum(map(len, required.values())) == 2226
-assert len(indexes) == 329
-assert len(relations) == 504
+assert len(required) == 272
+assert sum(map(len, required.values())) == 2242
+assert len(indexes) == 331
+assert len(relations) == 505
 assert SCHEMA.read_bytes() == MANUAL.read_bytes()
 
 patch = WORKFLOW_ADD_ONLY.read_text(encoding='utf-8')

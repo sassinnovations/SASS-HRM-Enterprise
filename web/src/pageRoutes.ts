@@ -77,6 +77,8 @@ export const PAGE_ROUTES: Record<string, string> = {
 
   approvals: '/services/approval-inbox',
   assets: '/services/asset-management',
+  products: '/services/products',
+  projects: '/services/projects',
   documents: '/services/employee-documents',
   vault: '/services/secure-document-vault',
 

@@ -7,8 +7,8 @@ from mysql_feature_schema_integrity import (
 )
 from schema_audit import get_required_schema
 required, indexes, relations = check_file_package()
-assert len(required) == 270
-assert sum(map(len, required.values())) == 2226
+assert len(required) == 272
+assert sum(map(len, required.values())) == 2242
 migration = EXTENSION_ADD_ONLY.read_text(encoding='utf-8')
 statements = split_ddl(migration)
 assert len(statements) == 15
