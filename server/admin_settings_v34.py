@@ -42,6 +42,12 @@ class TalentServiceSettings(BaseModel):
     asset_inventory_review_days: int = Field(default=90, ge=7, le=365)
     profile_review_days: int = Field(default=30, ge=1, le=180)
     employee_services_guidance: str = Field(default='Review employee documents only through approved, role-restricted processes.', max_length=350)
+    # Performance and employee culture: human-reviewed targets only.
+    performance_review_followup_days: int = Field(default=14, ge=1, le=90)
+    goal_checkin_review_days: int = Field(default=30, ge=7, le=180)
+    training_completion_review_days: int = Field(default=45, ge=7, le=365)
+    employee_voice_review_days: int = Field(default=7, ge=1, le=60)
+    performance_culture_guidance: str = Field(default='Managers should use job-relevant evidence and document decisions through approved reviews.', max_length=350)
     # HR policy administration
     policy_review_months: int = Field(default=12, ge=1, le=36)
     announcement_review_days: int = Field(default=30, ge=1, le=365)

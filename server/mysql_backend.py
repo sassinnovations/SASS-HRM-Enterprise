@@ -114,6 +114,14 @@ def install_schema(connection):
                 cur.execute('INSERT IGNORE INTO schema_migrations(version,description,applied_at) VALUES(%s,%s,%s)',
                             (32,'Additive operational evidence foundations: 20 tables',datetime.now(timezone.utc).isoformat()))
                 cur.execute('INSERT IGNORE INTO schema_migrations(version,description,applied_at) VALUES(%s,%s,%s)',
+                            (33,'Administrator product catalog and project register',datetime.now(timezone.utc).isoformat()))
+                cur.execute('INSERT IGNORE INTO schema_migrations(version,description,applied_at) VALUES(%s,%s,%s)',
+                            (34,'Personal workspace settings and role-scoped manual controls',datetime.now(timezone.utc).isoformat()))
+                cur.execute('INSERT IGNORE INTO schema_migrations(version,description,applied_at) VALUES(%s,%s,%s)',
+                            (35,'Persistent filters, draft organization and private calendar categories',datetime.now(timezone.utc).isoformat()))
+                cur.execute('INSERT IGNORE INTO schema_migrations(version,description,applied_at) VALUES(%s,%s,%s)',
+                            (36,'Personal defaults for request drafts and calendar agenda views',datetime.now(timezone.utc).isoformat()))
+                cur.execute('INSERT IGNORE INTO schema_migrations(version,description,applied_at) VALUES(%s,%s,%s)',
                             (1,'Initial full HRMS schema',datetime.now(timezone.utc).isoformat()))
                 cur.execute('INSERT IGNORE INTO schema_migrations(version,description,applied_at) VALUES(%s,%s,%s)',
                             (2,'Additive Talent Operations v1.7 schema',datetime.now(timezone.utc).isoformat()))
@@ -190,6 +198,7 @@ def rewrite_sql(sql: str) -> str:
     sql=re.sub(r'\bON\s+CONFLICT\s*\([^)]*\)\s+DO\s+UPDATE\s+SET\s+',
                'ON DUPLICATE KEY UPDATE ',sql,flags=re.I|re.S)
     sql=re.sub(r'\bexcluded\.(\w+)\b',r'VALUES(\1)',sql,flags=re.I)
+    sql=re.sub(r'\bINDEX\s+IF\s+NOT\s+EXISTS\b','INDEX',sql,flags=re.I)
     # All API SQL uses bind parameters rather than embedding question marks in literals.
     return sql.replace('?', '%s')
 
@@ -260,9 +269,32 @@ class MySQLCompatConnection:
                     if isinstance(e,pymysql.err.IntegrityError):
                         # API handlers already catch sqlite3.IntegrityError for 409s.
                         raise sqlite3.IntegrityError(str(e)) from e
+                    if (isinstance(e,pymysql.err.OperationalError)
+                            and getattr(e,'args',())[0:1] == (1061,)
+                            and re.search(r'^\s*CREATE\s+(?:UNIQUE\s+)?INDEX\b',sql,re.I)):
+                        return BufferedResult()
                 except ImportError:pass
                 raise
             return BufferedResult(cur.fetchall() if cur.description else (),cur.lastrowid,cur.rowcount)
+    def executemany(self, sql: str, param_sets):
+        """Bulk parameterized writes, used by large JD imports.
+
+        Compatible with sqlite3.Connection.executemany and the existing adapter.
+        Data is still committed only by the surrounding db() transaction.
+        """
+        with self.raw.cursor() as cur:
+            try:
+                cur.executemany(rewrite_sql(sql), param_sets)
+            except Exception as e:
+                try:
+                    import pymysql
+                    if isinstance(e,pymysql.err.IntegrityError):
+                        raise sqlite3.IntegrityError(str(e)) from e
+                except ImportError:
+                    pass
+                raise
+            return BufferedResult((),cur.lastrowid,cur.rowcount)
+
     def executescript(self, sql):
         # MySQL DDL is installed by install_schema() from mysql_schema.sql.
         # Legacy API startup hooks only register tables. No sample rows are inserted.

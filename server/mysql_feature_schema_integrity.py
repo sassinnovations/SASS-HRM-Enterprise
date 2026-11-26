@@ -1,6 +1,6 @@
-"""Read-only verification for the complete SASS HRM Enterprise MySQL schema.
+"""Read-only verification for the SASS HRM — SASS INNOVATIONS ENTERPRISE MySQL schema.
 
-Offline mode compares bundled installers, 241-table inventory, indexes, foreign keys,
+Offline mode compares bundled installers, 288-table inventory, indexes, foreign keys,
 and backend-owned declarations. Live mode additionally queries INFORMATION_SCHEMA;
 no user/candidate/payroll records are read or changed.
 """
@@ -32,6 +32,23 @@ ASSET_ADD_ONLY = ROOT / 'database/16_ASSET_MANAGEMENT_PROFILES_INSPECTIONS_ADD_O
 QUALITY_IMPORT_ADD_ONLY = ROOT / 'database/17_HR_DATA_QUALITY_IMPORT_ADD_ONLY.sql'
 EVIDENCE_ADD_ONLY = ROOT / 'database/18_ADDITIONAL_OPERATIONAL_EVIDENCE_ADD_ONLY.sql'
 EXPENSES_ADD_ONLY = ROOT / 'database/19_EXPENSES_CLAIMS_SETTINGS_ADD_ONLY.sql'
+JD_ADD_ONLY = ROOT / 'database/20_RECRUITMENT_JD_LIBRARY_ADD_ONLY.sql'
+OPERATIONS_21_ADD_ONLY = ROOT / 'database/21_RECRUITMENT_HR_OPERATIONS_ADD_ONLY.sql'
+VERIFICATION_22_ADD_ONLY = ROOT / 'database/22_DATABASE_VERIFICATION_HISTORY_ADD_ONLY.sql'
+AI_COPILOT_23_ADD_ONLY = ROOT / 'database/23_AI_COPILOT_ADD_ONLY.sql'
+VERIFICATION_22_TABLES = ('database_verification_runs', 'database_verification_findings', 'database_module_checks')
+OPERATIONS_21_TABLES = (
+    'recruitment_match_runs', 'recruitment_match_results', 'recruitment_match_review_notes',
+    'recruitment_jd_revision_markers', 'recruitment_jd_approval_requests',
+    'candidate_application_links', 'candidate_interview_schedule_changes',
+    'candidate_shortlist_decisions', 'employee_onboarding_task_assignments',
+    'employee_employment_verification_requests', 'employee_policy_exception_requests',
+    'attendance_location_exception_reviews', 'leave_request_approval_steps',
+    'payroll_preflight_validation_results', 'payroll_statutory_filing_receipts',
+    'expense_receipt_verification_cases', 'asset_stocktake_sessions',
+    'asset_stocktake_items', 'integration_import_batches', 'integration_import_row_errors',
+)
+JD_TABLES = ('jd_import_batches','recruitment_job_descriptions')
 EXPENSE_TABLES = ('expense_policy_settings','expense_claim_details','expense_claim_events','expense_reimbursement_records')
 EVIDENCE_TABLES = frozenset({
  'employee_contact_change_reviews', 'employee_employment_letter_register',
@@ -81,6 +98,17 @@ LEGACY_TABLES = frozenset({
     'account_login_events', 'account_signup_requests', 'attendance_capture_events',
     'attendance_photo_evidence', 'attendance_device_nonces'
 })
+WORKSPACE_MIGRATION_TABLES = (
+    'self_service_preferences', 'self_service_drafts', 'employee_calendar_preferences',
+    'employee_inbox_reminders', 'employee_security_preferences', 'employee_security_checklist',
+    'leave_coverage_warning_options', 'leave_coverage_manual_plans',
+)
+WORKSPACE_SETTINGS_TABLES = (
+    'leave_coverage_personal_preferences', 'self_service_draft_organization',
+    'employee_inbox_display_defaults', 'employee_calendar_categories',
+    'personal_calendar_event_categories', 'employee_security_checklist_settings',
+)
+WORKSPACE_VIEW_TABLES = ('self_service_draft_views', 'employee_calendar_agenda_preferences')
 TABLE_PATTERN = re.compile(r'^CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+`?(\w+)`?\s*\(', re.I)
 INDEX_PATTERN = re.compile(r'^CREATE\s+(?:UNIQUE\s+)?INDEX\s+`?(\w+)`?\s+ON\s+`?(\w+)`?\s*\(', re.I)
 INLINE_INDEX_PATTERN = re.compile(r'\b(?:UNIQUE\s+)?(?:KEY|INDEX)\s+`?([a-z_][a-z_0-9]*)`?\s*\(', re.I)
@@ -116,12 +144,42 @@ def check_file_package():
     required = get_required_schema()
     if (issues := source_coverage(required)):
         raise ValueError('Backend table declarations not covered by MySQL: ' + '; '.join(issues[:10]))
-    if len(required) != 241 or sum(map(len, required.values())) != 1986:
-        raise ValueError('Release contract changed; review/refresh 241-table, 1986-column inventory')
+    if len(required) != 288 or sum(map(len, required.values())) != 2318:
+        raise ValueError('Release contract changed; review/refresh 288-table, 2318-column inventory')
     if MANUAL.read_bytes() != SCHEMA.read_bytes():
         raise ValueError('database/01_application_schema.sql is out of sync with server/mysql_schema.sql')
 
     tables, indexes, foreign_keys, ordered = sql_objects(schema)
+    catalog_names = ['hrm_work_catalog', 'hrm_work_catalog_settings']
+    workspace_names = list(WORKSPACE_MIGRATION_TABLES)
+    final_names = ['official_work_detail_requests', *catalog_names, *workspace_names, *WORKSPACE_SETTINGS_TABLES, *WORKSPACE_VIEW_TABLES]
+    if ordered[-len(final_names):] != final_names:
+        raise ValueError('Additive release tables are out of order')
+    workspace_sql = (ROOT / 'database/27_WORKSPACE_MANUAL_CONTROLS_ADD_ONLY.sql').read_text(encoding='utf-8')
+    w_tables, w_indexes, w_keys, w_order = sql_objects(workspace_sql)
+    if (w_order != workspace_names or len(split_ddl(workspace_sql)) != len(workspace_names)
+            or any(w_tables[name] != tables[name] for name in workspace_names)
+            or not w_indexes <= indexes or not w_keys <= foreign_keys):
+        raise ValueError('Manual workspace migration must match the canonical add-only definitions')
+    settings_sql = (ROOT / 'database/28_WORKSPACE_PERSISTENT_SETTINGS_ADD_ONLY.sql').read_text(encoding='utf-8')
+    s_tables, s_indexes, s_keys, s_order = sql_objects(settings_sql)
+    if (tuple(s_order) != WORKSPACE_SETTINGS_TABLES or len(split_ddl(settings_sql)) != len(s_order)
+            or any(s_tables[name] != tables[name] for name in s_order)
+            or not s_indexes <= indexes or not s_keys <= foreign_keys):
+        raise ValueError('Workspace settings migration must match the canonical add-only definitions')
+    views_sql = (ROOT / 'database/29_WORKSPACE_VIEW_DEFAULTS_ADD_ONLY.sql').read_text(encoding='utf-8')
+    v_tables, v_indexes, v_keys, v_order = sql_objects(views_sql)
+    if (tuple(v_order) != WORKSPACE_VIEW_TABLES or len(split_ddl(views_sql)) != len(v_order)
+            or any(v_tables[name] != tables[name] for name in v_order)
+            or not v_indexes <= indexes or not v_keys <= foreign_keys):
+        raise ValueError('Workspace view defaults migration must match the canonical add-only definitions')
+    catalog_sql = (ROOT / 'database/26_PRODUCT_PROJECT_CATALOG_ADD_ONLY.sql').read_text(encoding='utf-8')
+    catalog_tables, catalog_indexes, catalog_keys, catalog_order = sql_objects(catalog_sql)
+    if (catalog_order != catalog_names or len(split_ddl(catalog_sql)) != len(catalog_names)
+            or any(catalog_tables[name] != tables[name] for name in catalog_names)
+            or not catalog_indexes <= indexes or not catalog_keys <= foreign_keys):
+        raise ValueError('Work catalog migration must match the canonical add-only definitions')
+    historical_order = ordered[:-len(final_names)]  # Keep the older migration-order assertions unchanged.
     fresh_sql = FRESH.read_text(encoding='utf-8')
     fresh_tables, fresh_indexes, fresh_foreign_keys, fresh_ordered = sql_objects(fresh_sql)
     if tables != fresh_tables or indexes != fresh_indexes or foreign_keys != fresh_foreign_keys or ordered != fresh_ordered:
@@ -273,7 +331,7 @@ def check_file_package():
     evidence_tables, evidence_indexes, evidence_fks, evidence_order = sql_objects(evidence_sql)
     if len(evidence_statements) != 20 or set(evidence_tables) != EVIDENCE_TABLES:
         raise ValueError('Operational evidence upgrade must declare exactly 20 tables')
-    if evidence_order != ordered[-24:-4]:
+    if evidence_order != historical_order[-52:-32]:
         raise ValueError('Operational evidence tables must be the final canonical schema declarations')
     if any(evidence_tables[name] != tables[name] for name in evidence_order):
         raise ValueError('Operational evidence upgrade differs from canonical schema')
@@ -291,7 +349,7 @@ def check_file_package():
     expenses_sql = EXPENSES_ADD_ONLY.read_text(encoding='utf-8')
     exp_statements = split_ddl(expenses_sql)
     exp_tables, exp_indexes, exp_fks, exp_order = sql_objects(expenses_sql)
-    if len(exp_statements) != 4 or exp_order != list(EXPENSE_TABLES) or ordered[-4:] != exp_order:
+    if len(exp_statements) != 4 or exp_order != list(EXPENSE_TABLES) or historical_order[-32:-28] != exp_order:
         raise ValueError('Expense workflow migration must contain four trailing add-only tables (with inline indexes)')
     if any(exp_tables[name] != tables[name] for name in EXPENSE_TABLES):
         raise ValueError('Expense migration differs from the canonical schema')
@@ -301,6 +359,75 @@ def check_file_package():
         raise ValueError('Expense migration must not overwrite/delete HR data')
     if any('ENGINE=InnoDB' not in exp_tables[name] for name in EXPENSE_TABLES):
         raise ValueError('Expense workflow tables must use InnoDB')
+    # Release 20: exact pair of new JD/import tables, no pre-existing DDL changed.
+    jd_sql=JD_ADD_ONLY.read_text(encoding='utf-8')
+    jd_statements=split_ddl(jd_sql)
+    jd_tables,jd_indexes,jd_fks,jd_order=sql_objects(jd_sql)
+    if len(jd_statements)!=2 or jd_order!=list(JD_TABLES) or historical_order[-28:-26]!=jd_order:
+        raise ValueError('JD migration must declare the final two tables in dependency order')
+    if any(jd_tables[name]!=tables[name] for name in JD_TABLES):
+        raise ValueError('JD migration does not match authoritative MySQL schema')
+    if not jd_indexes <= indexes or not jd_fks <= foreign_keys:
+        raise ValueError('JD migration must declare consistent indexes and relationships')
+    if any(not TABLE_PATTERN.match(stmt) or forbidden.search(stmt) or
+           'ENGINE=InnoDB' not in stmt or 'DEFAULT CHARSET=utf8mb4' not in stmt or
+           re.search(r'\bON DELETE\s+CASCADE\b', stmt,re.I)
+           for stmt in jd_statements):
+        raise ValueError('JD migration must be non-destructive add-only SQL')
+    # Migration 21 is an exact, contiguous add-only suffix after the original 243 DDLs.
+    # In particular, JD-related foreign keys must not block hard JD removal.
+    extension_21_sql = OPERATIONS_21_ADD_ONLY.read_text(encoding='utf-8')
+    extension_21_statements = split_ddl(extension_21_sql)
+    extra_tables, extra_indexes, extra_fks, extra_order = sql_objects(extension_21_sql)
+    if len(extension_21_statements) != 20 or extra_order != list(OPERATIONS_21_TABLES) or historical_order[-26:-6] != extra_order:
+        raise ValueError('Migration 21 must append exactly 20 new tables, in dependency order')
+    if any(extra_tables[name] != tables[name] for name in OPERATIONS_21_TABLES):
+        raise ValueError('Migration 21 differs from authoritative MySQL schema')
+    if not extra_indexes <= indexes or not extra_fks <= foreign_keys:
+        raise ValueError('Migration 21 indexes or FK definitions differ from authoritative schema')
+    if any(not TABLE_PATTERN.match(stmt) or forbidden.search(stmt) or
+           'ENGINE=InnoDB' not in stmt or 'DEFAULT CHARSET=utf8mb4' not in stmt or
+           re.search(r'\bON\s+DELETE\s+CASCADE\b', stmt, re.I)
+           for stmt in extension_21_statements):
+        raise ValueError('Migration 21 must be additive InnoDB CREATE TABLE statements only')
+    if re.search(r'\b(?:fingerprint_template|iris_template|bank_account_number|password_hash|api_secret|resume_text)\b',
+                 extension_21_sql, re.I):
+        raise ValueError('Migration 21 must not store biometrics, secrets or full resumes')
+    for table, _, referenced, _ in extra_fks:
+        if referenced == 'recruitment_job_descriptions':
+            statement = extra_tables[table]
+            # Every JD link is nullable and explicitly SET NULL to preserve existing
+            # permanent deletion workflows (including all-JD deletion).
+            if not re.search(r'FOREIGN\s+KEY\s*\(job_description_id\)\s+REFERENCES\s+recruitment_job_descriptions\s*\(id\)\s+ON\s+DELETE\s+SET\s+NULL',
+                             statement, re.I):
+                raise ValueError(f'Migration 21 table {table} must allow permanent JD deletion')
+    # Migration 22: stored database integrity checks, with backend handlers and UI.
+    verification=VERIFICATION_22_ADD_ONLY.read_text(encoding='utf-8')
+    verification_statements=split_ddl(verification)
+    vtables,vindexes,vfks,vorder=sql_objects(verification)
+    if (len(verification_statements)!=3 or vorder!=list(VERIFICATION_22_TABLES)
+            or historical_order[-6:-3]!=vorder):
+        raise ValueError('Migration 22 must append three operational verification tables')
+    if any(vtables[name]!=tables[name] for name in vorder):
+        raise ValueError('Migration 22 differs from authoritative schema')
+    if not vindexes<=indexes or not vfks<=foreign_keys:
+        raise ValueError('Migration 22 index or foreign key definitions disagree')
+    if any(not TABLE_PATTERN.match(stmt) or forbidden.search(stmt)
+           or 'ENGINE=InnoDB' not in stmt or 'DEFAULT CHARSET=utf8mb4' not in stmt
+           or re.search(r'\bON DELETE CASCADE\b', stmt, re.I)
+           for stmt in verification_statements):
+        raise ValueError('Migration 22 must contain only safe add-only table DDL')
+    # Migration 23: approved knowledge and time-limited employee-bound action proposals.
+    ai_sql=AI_COPILOT_23_ADD_ONLY.read_text(encoding='utf-8')
+    ai_statements=split_ddl(ai_sql)
+    ai_tables, ai_indexes, ai_fks, ai_order=sql_objects(ai_sql)
+    if len(ai_statements)!=3 or ai_order!=['ai_knowledge_articles','ai_knowledge_scopes','ai_action_proposals'] or historical_order[-3:]!=ai_order:
+        raise ValueError('Migration 23 must append exactly three AI copilot tables')
+    if any(ai_tables[name]!=tables[name] for name in ai_order) or not ai_indexes<=indexes or not ai_fks<=foreign_keys:
+        raise ValueError('AI Copilot migration must match the canonical MySQL DDL')
+    if any(not TABLE_PATTERN.match(stmt) or forbidden.search(stmt) or 'ENGINE=InnoDB' not in stmt
+           for stmt in ai_statements):
+        raise ValueError('AI Copilot migration must be add-only InnoDB SQL')
     with INVENTORY.open(newline='', encoding='utf-8-sig') as f:
         rows = list(csv.DictReader(f))
     by_name = {row['Table']: row for row in rows}
@@ -373,7 +500,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description='Check every SASS HRM MySQL schema module (no writes)')
     parser.add_argument('--live', action='store_true', help='Also query information_schema in the running MySQL database')
     parser.add_argument('--file-only', action='store_true', help='Validate only the bundled schema files')
-    parser.add_argument('--expected-database', default=os.getenv('MYSQL_DATABASE', 'sass_hrm'),
+    parser.add_argument('--expected-database', default=(os.getenv('MYSQL_DATABASE') or os.getenv('MYSQLDATABASE') or 'sass_hrm'),
                         help='Expected selected MySQL database name (safety guard)')
     args = parser.parse_args(argv)
     if args.file_only and args.live:

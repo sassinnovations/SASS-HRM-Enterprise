@@ -33,7 +33,7 @@ def developer_status(user=Depends(require_developer)):
         {'key':'calendar','label':'Personal calendar storage','ready':True,'hint':'Private calendar table available'}
     ]
     return {
-        'service':'SASS HRM Enterprise',
+        'service':'SASS HRM — SASS INNOVATIONS ENTERPRISE',
         'app_version':app.version,
         'api_status':'healthy',
         'database_engine':DB_ENGINE,

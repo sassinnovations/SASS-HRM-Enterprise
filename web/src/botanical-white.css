@@ -1,0 +1,41 @@
+/* Botanicals are decorative, local, and always behind the readable UI. */
+.login-shell .login-intro{
+  background:linear-gradient(155deg,#242a72,#4a47ab 55%,#6660bc);
+  color:#fff;border-right:0
+}
+.login-shell .login-intro::before{
+  border-color:#ffffff16;box-shadow:0 0 0 80px #ffffff05,0 0 0 155px #ffffff04
+}
+.login-shell .login-intro::after{
+  content:"";position:absolute;right:-52px;bottom:-92px;width:min(88%,585px);aspect-ratio:510/568;
+  background:url('./art/porcelain-botanical.svg') center/contain no-repeat;
+  opacity:.19;pointer-events:none;z-index:0
+}
+.login-shell .login-brand,.login-shell .login-end{position:relative;z-index:1}
+.login-shell .login-brand .brand-icon{background:#ffffff24;border-color:#ffffff3a;color:#fff}
+.login-shell .login-brand small,.login-shell .login-end span{color:#dedbfa}
+.login-shell .login-end,.login-shell .login-features{color:#f2efff}
+.login-shell .login-statement h1 span{color:#c0b9ff}
+.login-shell .login-statement p{color:#e0ddf8}
+.login-shell .login-features svg{color:#a6efd0}
+.login-shell .pill.inverse{background:#ffffff1c;border-color:#ffffff42;color:#fff}
+.login-shell .pill.inverse .pulse-dot{background:#65d8ad}
+.login-shell .btn.primary{background:#5a5fe9;border-color:#5a5fe9}
+.login-shell .btn.primary:hover:not(:disabled){background:#484cc8}
+.login-shell .login-main,.shell .content{
+  background-color:#fff;
+  background-image:url('./art/porcelain-botanical.svg');
+  background-position:right bottom;background-repeat:no-repeat;
+  background-size:clamp(270px,36vw,540px) auto;
+}
+.shell .content{background-size:clamp(230px,27vw,400px) auto}
+.shell .page-content{background:transparent}
+.shell .content :is(.global-search,.page-header,.section-card,.gd){background-color:#fff}
+@media(max-width:920px){
+ .login-shell .login-main{background-position:right -65px bottom -16px}
+ .shell .content{background-position:right -70px bottom -50px}
+}
+@media(forced-colors:active){
+ .login-shell .login-intro::after{display:none}
+ .login-shell .login-main,.shell .content{background-image:none}
+}

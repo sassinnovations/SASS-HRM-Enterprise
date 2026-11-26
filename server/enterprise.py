@@ -3,13 +3,14 @@ from __future__ import annotations
 
 import csv
 import io
+import re
 import sqlite3
 from datetime import date, datetime, timezone, timedelta
 from typing import Literal
 
 from fastapi import Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from main import app, db, rows, current_user, require_hr, require_manager, audit
 
@@ -74,10 +75,11 @@ def init_enterprise():
 class DeptIn(BaseModel):
     name: str=Field(min_length=2,max_length=80)
     location: str=Field(min_length=2,max_length=80)
+    head_id: int|None=None
 class HolidayIn(BaseModel):
     name: str=Field(min_length=2,max_length=100)
     day: date
-    location: str='All'
+    location: str=Field(default='All',min_length=2,max_length=80)
 class AnnouncementIn(BaseModel):
     title: str=Field(min_length=3,max_length=150)
     body: str=Field(min_length=5,max_length=3000)
@@ -92,11 +94,19 @@ class JobStatus(BaseModel):
 class CandidateStage(BaseModel):
     stage: Literal['Applied','Screening','Assessment','Interview','Offer','Hired','Rejected']
 class EmployeePatch(BaseModel):
+    # Edit official HR details only; access roles, passwords and database IDs are separate.
+    model_config = ConfigDict(extra='forbid')
+    code: str|None=Field(default=None,min_length=3,max_length=50)
+    name: str|None=Field(default=None,min_length=2,max_length=100)
+    email: str|None=Field(default=None,min_length=6,max_length=200)
+    work_email: str|None=Field(default=None,min_length=6,max_length=200)
     designation: str|None=Field(default=None,min_length=2,max_length=120)
     department: str|None=Field(default=None,min_length=2,max_length=100)
     location: str|None=Field(default=None,min_length=2,max_length=100)
     work_mode: Literal['Remote','Hybrid','On-site']|None=None
+    join_date: date|None=None
     manager_id: int|None=None
+    change_reason: str=Field(default='',max_length=450)
 class OnboardIn(BaseModel):
     employee_id: int
     title: str=Field(min_length=3,max_length=150)
@@ -202,60 +212,327 @@ def assign_shift(body:ShiftAssignmentIn,user=Depends(require_manager)):
         audit(c,user['id'],'shift.assigned',f'shift_assignment:{r.lastrowid}')
         return {'id':r.lastrowid}
 
+
+class ShiftDeleteIn(BaseModel):
+    confirm: Literal['DELETE']
+    reason: str = Field(min_length=5, max_length=500)
+
+
+def shift_delete_reason(body: ShiftDeleteIn) -> str:
+    reason = body.reason.strip()
+    if len(reason) < 5:
+        raise HTTPException(422, 'Deletion reason must be at least 5 characters')
+    return reason
+
+
+@app.put('/api/shifts/{shift_id}')
+def update_shift_template(shift_id: int, body: ShiftIn, user=Depends(require_hr)):
+    if body.start_time == body.end_time or not body.name.strip() or not body.location.strip():
+        raise HTTPException(422, 'Shift requires a name, location and different start/end times')
+    with db() as c:
+        existing = record(c, 'shifts', shift_id)
+        desired = (body.name.strip(), body.start_time, body.end_time, body.location.strip())
+        original = tuple(existing[k] for k in ('name', 'start_time', 'end_time', 'location'))
+        if desired != original:
+            used = c.execute('SELECT 1 FROM shift_assignments WHERE shift_id=? LIMIT 1', (shift_id,)).fetchone()
+            if used:
+                raise HTTPException(409, 'This shift has scheduled assignments. Create a new shift template instead of changing historical schedules')
+            c.execute('UPDATE shifts SET name=?,start_time=?,end_time=?,location=? WHERE id=?', (*desired, shift_id))
+            audit(c, user['id'], 'shift.updated', f'shift:{shift_id}')
+    return {'message': 'Shift updated'}
+
+
+@app.delete('/api/shifts/{shift_id}')
+def delete_shift_template(shift_id: int, body: ShiftDeleteIn, user=Depends(require_hr)):
+    reason = shift_delete_reason(body)
+    with db() as c:
+        record(c, 'shifts', shift_id)
+        if c.execute('SELECT 1 FROM shift_assignments WHERE shift_id=? LIMIT 1', (shift_id,)).fetchone():
+            raise HTTPException(409, 'Shift is assigned to employee schedules; remove future assignments first. Historical assignments cannot be deleted here')
+        c.execute('DELETE FROM shifts WHERE id=?', (shift_id,))
+        audit(c, user['id'], 'shift.deleted', f'shift:{shift_id}', reason)
+    return {'message': 'Shift deleted'}
+
+
+def check_shift_assignment(c, employee_id: int, shift_id: int, work_day: date, exclude_id: int = -1):
+    record(c, 'shifts', shift_id)
+    needs(c.execute('SELECT 1 FROM employees WHERE id=? AND account_active=1', (employee_id,)).fetchone() is not None,
+          'Active employee not found', 422)
+    d = work_day.isoformat()
+    approved_leave = c.execute("SELECT 1 FROM leave_requests WHERE employee_id=? AND status='Approved' AND start_date<=? AND end_date>=? LIMIT 1", (employee_id, d, d)).fetchone()
+    needs(approved_leave is None, 'Cannot schedule an employee on approved leave', 409)
+    conflict = c.execute("SELECT 1 FROM shift_assignments WHERE employee_id=? AND work_day=? AND id<>? LIMIT 1", (employee_id, d, exclude_id)).fetchone()
+    needs(conflict is None, 'An employee shift is already assigned on that date', 409)
+
+
+@app.put('/api/schedule/{assignment_id}')
+def update_shift_assignment(assignment_id: int, body: ShiftAssignmentIn, user=Depends(require_manager)):
+    with db() as c:
+        old = record(c, 'shift_assignments', assignment_id)
+    access_employee(user, old['employee_id'])
+    access_employee(user, body.employee_id)
+    if str(old['work_day'])[:10] < date.today().isoformat():
+        raise HTTPException(409, 'Past shifts are historical records; use the attendance correction workflow')
+    if body.work_day < date.today():
+        raise HTTPException(422, 'A schedule cannot be moved to a past date')
+    with db() as c:
+        check_shift_assignment(c, body.employee_id, body.shift_id, body.work_day, assignment_id)
+        c.execute('UPDATE shift_assignments SET employee_id=?,shift_id=?,work_day=? WHERE id=?',
+                  (body.employee_id, body.shift_id, body.work_day.isoformat(), assignment_id))
+        audit(c, user['id'], 'shift.assignment.updated', f'shift_assignment:{assignment_id}')
+    return {'message': 'Scheduled shift updated'}
+
+
+@app.delete('/api/schedule/{assignment_id}')
+def delete_shift_assignment(assignment_id: int, body: ShiftDeleteIn, user=Depends(require_manager)):
+    reason = shift_delete_reason(body)
+    with db() as c:
+        old = record(c, 'shift_assignments', assignment_id)
+    access_employee(user, old['employee_id'])
+    if str(old['work_day'])[:10] < date.today().isoformat():
+        raise HTTPException(409, 'Past shifts are preserved as historical records')
+    with db() as c:
+        c.execute('DELETE FROM shift_assignments WHERE id=?', (assignment_id,))
+        audit(c, user['id'], 'shift.assignment.deleted', f'shift_assignment:{assignment_id}', reason)
+    return {'message': 'Scheduled shift removed'}
+
+# Organization workspace CRUD. Existing tables are reused; no seed data or schema changes.
+# Admin writes are transactionally audited; department dependencies must be handled
+# explicitly so removing a department never silently detaches staff or job postings.
+class OrganizationDelete(BaseModel):
+    confirm: Literal['DELETE']
+    reason: str=Field(min_length=5,max_length=500)
+
+
+def valid_delete_reason(body:OrganizationDelete)->str:
+    reason=body.reason.strip()
+    if len(reason)<5: raise HTTPException(422,'A meaningful deletion reason of at least 5 characters is required')
+    return reason
+
+
+def clean_text(value: str, field: str) -> str:
+    cleaned=value.strip()
+    if not cleaned:
+        raise HTTPException(422,f'{field} cannot be blank')
+    return cleaned
+
+
+def valid_department_head(conn, head_id: int|None, department: str):
+    if head_id is None:
+        return
+    manager=conn.execute('SELECT id,department,role FROM employees WHERE id=?',(head_id,)).fetchone()
+    if not manager or manager['role'] not in ('manager','admin') or manager['department'].casefold()!=department.casefold():
+        raise HTTPException(422,'Department head must be a manager or administrator assigned to that department')
+
+
+def department_usage(conn, name: str) -> dict:
+    return {
+        'employees':int(conn.execute('SELECT COUNT(*) FROM employees WHERE LOWER(department)=LOWER(?)',(name,)).fetchone()[0]),
+        'job_postings':int(conn.execute('SELECT COUNT(*) FROM jobs WHERE LOWER(department)=LOWER(?)',(name,)).fetchone()[0]),
+        'job_descriptions':int(conn.execute('SELECT COUNT(*) FROM recruitment_job_descriptions WHERE LOWER(department)=LOWER(?)',(name,)).fetchone()[0]),
+    }
+
+
 @app.get('/api/organization/departments')
 def departments(user=Depends(current_user)):
-    with db() as c: return fetch(c,'SELECT * FROM departments ORDER BY name')
+    with db() as c:
+        return fetch(c, 'SELECT * FROM departments ORDER BY name')
+
 
 @app.post('/api/organization/departments',status_code=201)
 def create_dept(body:DeptIn,user=Depends(require_hr)):
+    name=clean_text(body.name,'Department name')
+    location=clean_text(body.location,'Primary location')
     with db() as c:
-        try: r=c.execute('INSERT INTO departments(name,location) VALUES(?,?)',(body.name,body.location))
-        except sqlite3.IntegrityError: raise HTTPException(409,'Department name exists')
-        audit(c,user['id'],'department.created',f'department:{r.lastrowid}')
+        valid_department_head(c,body.head_id,name)
+        if c.execute('SELECT 1 FROM departments WHERE LOWER(name)=LOWER(?)',(name,)).fetchone():
+            raise HTTPException(409,'Department name already exists')
+        try:
+            r=c.execute('INSERT INTO departments(name,location,head_id) VALUES(?,?,?)',(name,location,body.head_id))
+        except sqlite3.IntegrityError:
+            raise HTTPException(409,'Department name already exists')
+        audit(c,user['id'],'department.created',f'department:{r.lastrowid}',name)
         return {'id':r.lastrowid}
+
+
+@app.put('/api/organization/departments/{department_id}')
+def edit_dept(department_id:int,body:DeptIn,user=Depends(require_hr)):
+    name=clean_text(body.name,'Department name')
+    location=clean_text(body.location,'Primary location')
+    with db() as c:
+        old=record(c,'departments',department_id)
+        if old['name'].casefold()!=name.casefold():
+            usage=department_usage(c,old['name'])
+            if any(usage.values()):
+                raise HTTPException(409,'Reassign employees, job postings and JD records before renaming this department')
+        if c.execute('SELECT 1 FROM departments WHERE LOWER(name)=LOWER(?) AND id<>?',(name,department_id)).fetchone():
+            raise HTTPException(409,'Department name already exists')
+        valid_department_head(c,body.head_id,name)
+        try:
+            c.execute('UPDATE departments SET name=?,location=?,head_id=? WHERE id=?',(name,location,body.head_id,department_id))
+        except sqlite3.IntegrityError:
+            raise HTTPException(409,'Department name already exists')
+        audit(c,user['id'],'department.updated',f'department:{department_id}',f"{old['name']} → {name}; location: {old['location']} → {location}")
+    return {'message':'Department updated'}
+
+
+@app.delete('/api/organization/departments/{department_id}')
+def remove_dept(department_id:int,body:OrganizationDelete,user=Depends(require_hr)):
+    reason=valid_delete_reason(body)
+    with db() as c:
+        old=record(c,'departments',department_id)
+        usage=department_usage(c,old['name'])
+        if any(usage.values()):
+            raise HTTPException(409,'Department is still in use by employees, jobs or JDs. Reassign these records first.')
+        try:
+            c.execute('DELETE FROM departments WHERE id=?',(department_id,))
+        except sqlite3.IntegrityError:
+            raise HTTPException(409,'This department is linked to other HR records and cannot be deleted')
+        audit(c,user['id'],'department.deleted',f'department:{department_id}',f"{old['name']}; reason: {reason}")
+    return {'message':'Department permanently deleted'}
+
 
 @app.get('/api/organization/holidays')
 def holidays(user=Depends(current_user)):
     with db() as c: return fetch(c,'SELECT * FROM holidays ORDER BY day')
 
+
 @app.post('/api/organization/holidays',status_code=201)
 def create_holiday(body:HolidayIn,user=Depends(require_hr)):
+    name=clean_text(body.name,'Holiday name')
+    location=clean_text(body.location,'Holiday location')
     with db() as c:
-        try: r=c.execute('INSERT INTO holidays(name,day,location) VALUES(?,?,?)',(body.name,str(body.day),body.location))
-        except sqlite3.IntegrityError: raise HTTPException(409,'Holiday already recorded for this date')
-        audit(c,user['id'],'holiday.created',f'holiday:{r.lastrowid}')
+        try:r=c.execute('INSERT INTO holidays(name,day,location) VALUES(?,?,?)',(name,body.day.isoformat(),location))
+        except sqlite3.IntegrityError:raise HTTPException(409,'Holiday already recorded for this date')
+        audit(c,user['id'],'holiday.created',f'holiday:{r.lastrowid}',name)
         return {'id':r.lastrowid}
+
+
+@app.put('/api/organization/holidays/{holiday_id}')
+def edit_holiday(holiday_id:int,body:HolidayIn,user=Depends(require_hr)):
+    name=clean_text(body.name,'Holiday name')
+    location=clean_text(body.location,'Holiday location')
+    with db() as c:
+        old=record(c,'holidays',holiday_id)
+        try:c.execute('UPDATE holidays SET name=?,day=?,location=? WHERE id=?',(name,body.day.isoformat(),location,holiday_id))
+        except sqlite3.IntegrityError:raise HTTPException(409,'Holiday already recorded for this date')
+        audit(c,user['id'],'holiday.updated',f'holiday:{holiday_id}',f"{old['name']} ({old['day']}) → {name} ({body.day.isoformat()})")
+    return {'message':'Holiday updated'}
+
+
+@app.delete('/api/organization/holidays/{holiday_id}')
+def remove_holiday(holiday_id:int,body:OrganizationDelete,user=Depends(require_hr)):
+    reason=valid_delete_reason(body)
+    with db() as c:
+        old=record(c,'holidays',holiday_id)
+        c.execute('DELETE FROM holidays WHERE id=?',(holiday_id,))
+        audit(c,user['id'],'holiday.deleted',f'holiday:{holiday_id}',f"{old['name']}; {old['day']}; reason: {reason}")
+    return {'message':'Holiday permanently deleted'}
+
 
 @app.get('/api/organization/announcements')
 def announcements(user=Depends(current_user)):
     with db() as c: return fetch(c,'SELECT a.*,e.name AS author_name FROM announcements a JOIN employees e ON e.id=a.author_id ORDER BY a.id DESC LIMIT 100')
 
+
 @app.post('/api/organization/announcements',status_code=201)
 def create_announcement(body:AnnouncementIn,user=Depends(require_hr)):
+    title=clean_text(body.title,'Announcement title')
+    text=clean_text(body.body,'Announcement text')
     with db() as c:
-        r=c.execute('INSERT INTO announcements(title,body,created_at,author_id) VALUES(?,?,?,?)',(body.title,body.body,now(),user['id']))
-        audit(c,user['id'],'announcement.published',f'announcement:{r.lastrowid}')
+        r=c.execute('INSERT INTO announcements(title,body,created_at,author_id) VALUES(?,?,?,?)',(title,text,now(),user['id']))
+        audit(c,user['id'],'announcement.published',f'announcement:{r.lastrowid}',title)
         return {'id':r.lastrowid}
+
+
+@app.put('/api/organization/announcements/{announcement_id}')
+def edit_announcement(announcement_id:int,body:AnnouncementIn,user=Depends(require_hr)):
+    title=clean_text(body.title,'Announcement title')
+    text=clean_text(body.body,'Announcement text')
+    with db() as c:
+        old=record(c,'announcements',announcement_id)
+        c.execute('UPDATE announcements SET title=?,body=? WHERE id=?',(title,text,announcement_id))
+        audit(c,user['id'],'announcement.updated',f'announcement:{announcement_id}',f"{old['title']} → {title}")
+    return {'message':'Announcement updated'}
+
+
+@app.delete('/api/organization/announcements/{announcement_id}')
+def remove_announcement(announcement_id:int,body:OrganizationDelete,user=Depends(require_hr)):
+    reason=valid_delete_reason(body)
+    with db() as c:
+        old=record(c,'announcements',announcement_id)
+        c.execute('DELETE FROM announcements WHERE id=?',(announcement_id,))
+        audit(c,user['id'],'announcement.deleted',f'announcement:{announcement_id}',f"{old['title']}; reason: {reason}")
+    return {'message':'Announcement permanently deleted'}
+
 
 @app.patch('/api/employees/{employee_id}')
 def update_employee(employee_id:int,body:EmployeePatch,user=Depends(require_hr)):
-    fields=body.model_dump(exclude_unset=True,exclude_none=True)
+    # Linked HR modules use the unchanging numeric employees.id, not the editable code.
+    fields=body.model_dump(exclude_unset=True)
+    reason=(fields.pop('change_reason','') or '').strip()
     if not fields: raise HTTPException(422,'No changes supplied')
+    for key,value in list(fields.items()):
+        if key=='manager_id': continue  # Explicit null removes a reporting manager.
+        if value is None: raise HTTPException(422,f'{key} cannot be empty')
+        if key=='join_date':
+            fields[key]=value.isoformat()
+        elif isinstance(value,str):
+            fields[key]=value.strip()
+            if key in ('email','work_email'):
+                fields[key]=fields[key].lower()
+                if not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',fields[key]):
+                    raise HTTPException(422,f'Enter a valid {key.replace("_"," ")} address')
+            elif key=='code':
+                if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{2,49}',fields[key]):
+                    raise HTTPException(422,'Employee code must use 3–50 letters, numbers, dots, underscores or hyphens')
+            elif key in ('name','designation','department','location') and len(fields[key])<2:
+                raise HTTPException(422,f'{key.replace("_"," ").title()} must be at least 2 characters')
     with db() as c:
-        record(c,'employees',employee_id)
-        if 'manager_id' in fields:
-            needs(fields['manager_id']!=employee_id,'Employee cannot manage themselves',422)
-            needs(c.execute("SELECT 1 FROM employees WHERE id=? AND role IN ('admin','manager')",(fields['manager_id'],)).fetchone() is not None,'Manager not found',422)
-            ancestor=fields['manager_id']
+        old=record(c,'employees',employee_id)
+        next_values={key:value for key,value in fields.items() if value!=old.get(key)}
+        if not next_values: return {'status':'unchanged','sessions_revoked':False,'changed_fields':[]}
+        if ('code' in next_values or 'join_date' in next_values) and len(reason)<6:
+            raise HTTPException(422,'Provide a reason (at least 6 characters) when changing employee code or joining date')
+        if 'code' in next_values:
+            if c.execute('SELECT id FROM employees WHERE id<>? AND lower(code)=lower(?) LIMIT 1',
+                         (employee_id,fields['code'])).fetchone():
+                raise HTTPException(409,'Employee code already belongs to another employee')
+        if 'email' in next_values or 'work_email' in next_values:
+            new_email=fields.get('email',old['email'])
+            new_work_email=fields.get('work_email',old['work_email'] or old['email'])
+            if c.execute('SELECT id FROM employees WHERE id<>? AND (lower(email) IN (?,?) OR lower(work_email) IN (?,?)) LIMIT 1',
+                (employee_id,new_email,new_work_email,new_email,new_work_email)).fetchone():
+                raise HTTPException(409,'Sign-in or work email belongs to another employee')
+        if 'manager_id' in next_values and next_values['manager_id'] is not None:
+            manager_id=next_values['manager_id']
+            needs(manager_id!=employee_id,'Employee cannot manage themselves',422)
+            needs(c.execute("SELECT 1 FROM employees WHERE id=? AND role IN ('admin','manager')",
+                            (manager_id,)).fetchone() is not None,'Manager not found',422)
+            ancestor=manager_id
             visited=set()
             while ancestor is not None:
-                needs(ancestor!=employee_id and ancestor not in visited,'Reporting chain cannot contain a cycle',422)
+                needs(ancestor!=employee_id and ancestor not in visited,
+                      'Reporting chain cannot contain a cycle',422)
                 visited.add(ancestor)
                 node=c.execute('SELECT manager_id FROM employees WHERE id=?',(ancestor,)).fetchone()
                 ancestor=node['manager_id'] if node else None
-        c.execute(f'UPDATE employees SET {", ".join(k+"=?" for k in fields)} WHERE id=?',[*fields.values(),employee_id])
-        audit(c,user['id'],'employee.updated',f'employee:{employee_id}',','.join(fields.keys()))
-        return {'status':'updated'}
+        login_changed=('email' in next_values or 'work_email' in next_values)
+        setters=', '.join(f'{key}=?' for key in next_values)
+        if login_changed: setters+=', session_version=session_version+1'
+        try:
+            c.execute(f'UPDATE employees SET {setters} WHERE id=?',
+                      [*next_values.values(),employee_id])
+        except sqlite3.IntegrityError as exc:
+            # Also covers a competing edit after preflight duplicate checks. MySQL
+            # adapter maps duplicate-key failures to sqlite3.IntegrityError.
+            raise HTTPException(409,'Employee code or email already belongs to another account') from exc
+        detail='Fields changed: '+','.join(next_values)
+        if 'code' in next_values: detail+=f'; Staff code: {old["code"]} -> {next_values["code"]}'
+        if reason: detail+='; Reason: '+reason
+        audit(c,user['id'],'employee.updated',f'employee:{employee_id}',detail)
+    return {'status':'updated','sessions_revoked':login_changed,
+            'changed_fields':list(next_values)}
 
 @app.get('/api/leave/balances/me')
 def leave_balances(user=Depends(current_user)):

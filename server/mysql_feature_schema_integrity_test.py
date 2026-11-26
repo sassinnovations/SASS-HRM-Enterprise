@@ -8,7 +8,7 @@ import re
 import mysql_backend
 
 expected, indexes, relations = check_file_package()
-assert len(expected) == 241 and sum(map(len, expected.values())) == 1986
+assert len(expected) == 288 and sum(map(len, expected.values())) == 2318
 schema_tables, schema_indexes, schema_relations, order = sql_objects(SCHEMA.read_text())
 assert set(schema_tables) == set(expected)
 assert len(order) == len(expected)
@@ -80,4 +80,4 @@ try:
         assert 'refusing to audit wrong database' in str(exc)
 finally:
     mysql_backend.raw_mysql_connection=old
-print('PASS: full schema file parity, 241 modules, safe read-only metadata and missing-index/FK detection')
+print('PASS: full schema file parity, 288 tables, safe read-only metadata and missing-index/FK detection')

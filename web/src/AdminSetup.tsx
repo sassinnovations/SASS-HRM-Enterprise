@@ -58,7 +58,7 @@ export function AdminSetupCenter({navigate,onChanged}:{navigate:(page:string)=>v
     <button type="button" onClick={()=>navigate('audit')}><ShieldCheck size={19}/><strong>Audit trail</strong><small>Review administrative changes and onboarding activity</small><ArrowRight size={15}/></button>
    </div>
   </section>
-  <DataQualityImporter onImported={onChanged}/>
+  {safeConnection&&<DataQualityImporter onImported={onChanged}/>}
   <section className="section-card setup-card"><div className="section-heading"><div><h3>Onboarding steps</h3><p>Complete setup in order before activating imported accounts.</p></div><UploadCloud size={19}/></div>
    <div className="setup-import-nav"><button type="button" onClick={()=>navigate('organization')}>1. Set up departments <ArrowRight size={14}/></button><button type="button" onClick={()=>navigate('employees')}>2. Review employee directory <ArrowRight size={14}/></button><button type="button" onClick={()=>navigate('accounts')}>3. Send account invitations <ArrowRight size={14}/></button><button type="button" onClick={()=>navigate('audit')}>4. Check audit trail <ArrowRight size={14}/></button></div>
   </section>

@@ -1,4 +1,4 @@
-"""SASS HRM Enterprise HRMS/HRIS API (no default accounts or seed records)."""
+"""SASS HRM — SASS INNOVATIONS ENTERPRISE HRMS/HRIS API (no default accounts or seed records)."""
 from __future__ import annotations
 
 import hashlib
@@ -35,7 +35,7 @@ if len(JWT_SECRET) < 40 or JWT_SECRET.startswith(('REPLACE_', 'LOCAL_DEMO', 'CHA
     raise RuntimeError('JWT_SECRET must be configured to a fresh random value of 40+ characters in server/.env')
 JWT_ISSUER = 'sass-hrm-enterprise'
 
-app = FastAPI(title='SASS HRM Enterprise API', version='4.8.0', description='SASS HRMS/HRIS with role-scoped employee assistance')
+app = FastAPI(title='SASS HRM — SASS INNOVATIONS ENTERPRISE API', version='4.8.0', description='SASS HRMS/HRIS with role-scoped employee assistance')
 _cors_origins = [x.strip().rstrip('/') for x in os.getenv('CORS_ORIGINS', 'http://localhost:5173').split(',') if x.strip()]
 _public_app_url = os.getenv('PUBLIC_APP_URL', '').strip().rstrip('/')
 if _public_app_url and _public_app_url not in _cors_origins:
@@ -205,11 +205,36 @@ def require_manager(user=Depends(current_user)):
         raise HTTPException(403,'Manager or HR admin only')
     return user
 
+@app.get('/api/live')
+def liveness():
+    """Process-only health check. No database I/O, credentials, or private data."""
+    return {'status': 'alive', 'service': 'SASS HRM API'}
+
+
 @app.get('/api/health')
 def health():
-    with db() as c:
-        c.execute('SELECT 1').fetchone()
-    return {'status':'ok','service':'SASS HRM Enterprise','version':app.version,'database':DB_ENGINE}
+    """Read-only database reachability. Never attempts schema installation."""
+    try:
+        if DB_ENGINE == 'mysql':
+            # The normal db() wrapper may perform additive schema installation on
+            # first use. A health probe must not change the production database.
+            from mysql_backend import raw_mysql_connection
+            conn = raw_mysql_connection()
+            try:
+                with conn.cursor() as cursor:
+                    cursor.execute('SELECT 1')
+                    cursor.fetchone()
+            finally:
+                conn.close()
+        else:
+            with db() as conn:
+                conn.execute('SELECT 1').fetchone()
+    except Exception as exc:
+        # Do not return SQL exception details, hosts, usernames or passwords.
+        import logging
+        logging.getLogger(__name__).warning('HRM database health check failed (%s)', type(exc).__name__)
+        raise HTTPException(status_code=503, detail='HRM database unavailable; check the backend logs and database connection') from exc
+    return {'status':'ok','service':'SASS HRM — SASS INNOVATIONS ENTERPRISE','version':app.version,'database':DB_ENGINE}
 
 @app.get('/api/ready')
 def readiness():
@@ -744,3 +769,20 @@ import biometric_attendance  # noqa: E402,F401
 
 # Employee expense policies, claim evidence metadata, lifecycle and manual reimbursement ledger
 import expense_management  # noqa: E402,F401
+
+# Job-description library: Excel/CSV import/export and advisory candidate ATS matching.
+import job_descriptions  # noqa: E402,F401
+import database_verification  # noqa: E402,F401 - admin-only database verification history
+import recruitment_match_history  # noqa: E402,F401 - persisted advisory match reviews and shortlists
+
+# Administrator-only, read-only feature screen -> API -> MySQL structural verification.
+import feature_screen_integrations  # noqa: E402,F401
+
+# v5.5 SASS AI Copilot: role-aware navigation, approved lexical RAG and confirmed self-service actions.
+import ai_copilot  # noqa: E402,F401
+
+# Permission-scoped Excel export, admin-only vetted master imports and feature operation directory.
+import module_excel_center  # noqa: E402,F401
+
+import service_center  # noqa: E402,F401 - consolidated case queue
+import work_catalog  # noqa: E402,F401 - product catalog and project register

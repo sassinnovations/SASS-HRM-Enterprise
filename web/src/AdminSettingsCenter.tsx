@@ -1,3 +1,5 @@
+import {ScreenDatabaseHealth} from './ScreenDatabaseHealth';
+import {FEATURE_GROUPS} from './featureCatalog';
 import {hrmFetch} from './apiTransport';
 import {useRefreshData} from './useRefreshData';
 import {useCallback,useEffect,useMemo,useState} from 'react';
@@ -11,6 +13,7 @@ type Settings = {
   task_default_due_days:number; task_overdue_review_days:number; offboarding_clearance_review_days:number; offboarding_guidance:string;
   document_review_days:number; asset_inventory_review_days:number; profile_review_days:number; employee_services_guidance:string;
   policy_review_months:number; announcement_review_days:number; policy_guidance:string;
+  performance_review_followup_days:number; goal_checkin_review_days:number;training_completion_review_days:number;employee_voice_review_days:number;performance_culture_guidance:string;
 };
 type Entry = {settings:Settings;source:'defaults'|'organization';updated_at:string|null;updated_by:number|null};
 type Overview = {sections:Record<string,boolean>;configured:number;total:number;note:string};
@@ -28,6 +31,8 @@ const defaults:Settings={
   employee_services_guidance:'Review employee documents only through approved, role-restricted processes.',
   policy_review_months:12,announcement_review_days:30,
   policy_guidance:'Publish only HR-approved policies and obtain legal review when required.',
+  performance_review_followup_days:14,goal_checkin_review_days:30,training_completion_review_days:45,employee_voice_review_days:7,
+  performance_culture_guidance:'Managers should use job-relevant evidence and document decisions through approved reviews.',
 };
 type NumericKey = {[K in keyof Settings]:Settings[K] extends number?K:never}[keyof Settings];
 type TextKey = {[K in keyof Settings]:Settings[K] extends string?K:never}[keyof Settings];
@@ -59,6 +64,12 @@ const groups:Group[]=[
   {key:'asset_inventory_review_days',label:'Asset inventory review interval',unit:'days',min:7,max:365},
   {key:'profile_review_days',label:'Professional profile review',unit:'days',min:1,max:180},
  ],texts:[{key:'employee_services_guidance',label:'Employee services guidance'}]},
+ {title:'Performance, learning & employee voice',detail:'Advisory review targets for performance follow-ups, learning completion and employee feedback; not automated ratings or decisions.',numbers:[
+  {key:'performance_review_followup_days',label:'Performance review follow-up',unit:'days',min:1,max:90},
+  {key:'goal_checkin_review_days',label:'Goal check-in review',unit:'days',min:7,max:180},
+  {key:'training_completion_review_days',label:'Learning completion review',unit:'days',min:7,max:365},
+  {key:'employee_voice_review_days',label:'Employee feedback follow-up',unit:'days',min:1,max:60},
+ ],texts:[{key:'performance_culture_guidance',label:'Manager review guidance'}]},
  {title:'Policy & Announcements',detail:'Internal HR content-review schedules. Publishing still requires authorized personnel.',numbers:[
   {key:'policy_review_months',label:'Policy review frequency',unit:'months',min:1,max:36},
   {key:'announcement_review_days',label:'Announcement freshness review',unit:'days',min:1,max:365},
@@ -77,6 +88,7 @@ const pages:{key:string;name:string;description:string;icon:typeof Settings2;che
  {key:'companysetup',name:'Company setup & import',description:'Company profile, departments, leave entitlements and HR policies.',icon:ClipboardCheck,checks:['company_identity','department_structure','leave_entitlements','published_policies']},
  {key:'workflowsettings',name:'Workflow settings',description:'HR helpdesk response and task/onboarding warning guidance.',icon:SlidersHorizontal,checks:['workflow_guidance']},
  {key:'coverage',name:'Team leave & coverage planner',description:'View approved team leave, office holidays, and set advisory coverage warning thresholds.',icon:CalendarDays,checks:[]},
+ {key:'excelcenter',name:'Excel & module data center',description:'Download approved Excel database sheets, export module data, preview master record imports and open safe edit/delete/settings workflows.',icon:UploadCloud,checks:[]},
  {key:'dataquality',name:'HR data quality center',description:'Review directory completeness and delayed workflows with owner assignment, safe CSV export and audit records.',icon:ClipboardCheck,checks:[]},
  {key:'tasktemplates',name:'Reusable HR task templates',description:'Create standard tasks, assign them securely to employees and track completion.',icon:ClipboardCheck,checks:[]},
  {key:'compensationsettings',name:'Compensation settings',description:'Attendance, payroll cutoff, timesheet and expense review targets.',icon:WalletCards,checks:['compensation_guidance']},
@@ -115,6 +127,9 @@ export function AdminSettingsCenter({mode,navigate}:{mode:'center'|'talent';navi
     {mode==='center'?<>
       <div className="asc-summary"><div className="asc-summary-icon"><Settings2 size={23}/></div><div><h2>Workspace configuration</h2><p>{overview?`${overview.configured} of ${overview.total} setup indicators contain saved records.`:'Checking saved organization settings...'}</p><small>These indicators measure setup records, not legal compliance, security approval or production readiness.</small></div></div>
       <div className="asc-grid">{pages.map(item=>{const Icon=item.icon;const isVault=item.key==='vault';const hasStatus=isVault?vaultReady!==null:Boolean(item.checks.length&&overview);const configured=isVault?vaultReady===true:item.checks.length?item.checks.every(k=>overview?.sections[k]):false;return <button key={item.key} type="button" className="asc-navigation" onClick={()=>navigate(item.key)}><span className="asc-icon"><Icon size={21}/></span><span className="asc-nav-body"><strong>{item.name}</strong><small>{item.description}</small>{hasStatus&&<em className={configured?'ok':'pending'}>{isVault?(configured?'Vault upload ready':'Vault configuration needed'):(configured?'Settings present':'Setup remaining')}</em>}</span><ArrowRight size={17}/></button>})}</div>
+      <ScreenDatabaseHealth navigate={navigate}/>
+      <div className="asc-catalog-intro"><h2>Combined feature management directory</h2><p>Similar settings are reached through one canonical configuration screen. Record editors remain in their owning HR module so that permissions, history and related data are preserved.</p></div>
+      <div className="asc-catalog">{FEATURE_GROUPS.map(group=><details className="asc-feature-group" key={group.title}><summary><span><strong>{group.title}</strong><small>{group.description}</small></span><em>{group.pages.length} pages</em></summary><div className="asc-feature-links">{group.settingsKey&&<button className="asc-settings-shortcut" type="button" onClick={()=>navigate(group.settingsKey!)}><Settings2 size={14}/>{group.settingsLabel}</button>}{group.pages.map(feature=><button key={feature.key} type="button" onClick={()=>navigate(feature.key)}>{feature.label}<ArrowRight size={14}/></button>)}</div></details>)}</div>
       <div className="asc-info"><ShieldCheck size={20}/><span>Administrator-only access is checked by the API. Only changed setting names are recorded in the audit log; passwords, JWT signing keys and employee records are not displayed here.</span></div>
     </>:<>
       <div className="asc-info"><ShieldCheck size={20}/><span><strong>Operational guidance only.</strong> Saving these settings changes the values shown to HR for planning; it does not send mail, activate escalations, delete records, grant permissions or execute payroll. Use the existing HRM workflows for those actions.</span></div>

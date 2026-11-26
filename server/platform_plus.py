@@ -65,8 +65,8 @@ def send_activation_email(destination: str, token: str, expiry: str):
     message=EmailMessage()
     message['From']=sender
     message['To']=destination
-    message['Subject']='Activate your SASS HRM account'
-    message.set_content(f"""You have been invited to SASS HRM Enterprise.
+    message['Subject']='Activate your SASS HRM — SASS INNOVATIONS ENTERPRISE account'
+    message.set_content(f"""You have been invited to SASS HRM — SASS INNOVATIONS ENTERPRISE.
 
 Open {origin} and choose "Activate employee account".
 Activation token (valid until {expiry}):
@@ -97,7 +97,7 @@ class AccountState(BaseModel):
 @app.get('/api/admin/accounts')
 def accounts(user=Depends(require_hr)):
     with db() as c:
-        return rows(c.execute('''SELECT e.id,e.code,e.name,e.email,COALESCE(e.work_email,e.email) AS work_email,e.designation,e.department,e.location,e.work_mode,e.role,COALESCE(t.tier,e.role) AS access_tier,e.account_active,e.session_version,
+        return rows(c.execute('''SELECT e.id,e.code,e.name,e.email,COALESCE(e.work_email,e.email) AS work_email,e.designation,e.department,e.location,e.work_mode,e.join_date,e.role,COALESCE(t.tier,e.role) AS access_tier,e.account_active,e.session_version,
               (SELECT COALESCE(MAX(g.enabled),0) FROM developer_grants g WHERE g.employee_id=e.id) AS developer_access,
               (SELECT COUNT(*) FROM account_invites ai WHERE ai.employee_id=e.id AND ai.used_at IS NULL
                AND ai.expires_at>?) AS pending_invites FROM employees e LEFT JOIN account_access_tiers t ON t.employee_id=e.id ORDER BY e.id''',(now(),)))

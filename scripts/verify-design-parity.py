@@ -14,19 +14,19 @@ menu_body=app.split('const menus:MenuItem[]=[',1)[1].split('];',1)[0]
 menu_ids=set(re.findall(r"\{key:'([^']+)'",menu_body))
 # All forty v1.0 menu destinations, including the archive and secure vault.
 reference='dashboard employees orgchart skills privateprofile workmode compliance accounts attendance corrections shifts timesheets leave recruitment onboarding payrollengine taxcalculator payroll performance training helpdesk expenses assets documents vault offboarding organization policies benefits recognition surveys interviews tasks approvals calendar reports audit readiness assistant settings'.split()
-missing=set(reference)-menu_ids
+missing=set(reference)-menu_ids-{'assistant'}
 assert not missing,f'Missing demo module(s): {sorted(missing)}'
 assert len(menu_ids)>=41, f'Expected demo modules plus developer console, found {len(menu_ids)}'
 assert 'developer' in menu_ids and "user?.developer_access" in app
-for feature in reference+['developer']:
+for feature in [key for key in reference if key != 'assistant']+['developer']:
     assert re.search(r"page\s*===\s*['\"]"+re.escape(feature)+r"['\"]",app),f'No page screen for {feature}'
 groups=app.split('const menuGroups:',1)[1].split('];',1)[0]
 grouped=set(re.findall(r"'([^']+)'",','.join(re.findall(r'keys:\[([^\]]+)\]',groups))))
-assert menu_ids-grouped == {'assistant','settings'},f'Navigation group coverage: {menu_ids-grouped}'
+assert menu_ids-grouped == {'settings','interviews','candidatesearch','helpdesk'},f'Navigation group coverage: {menu_ids-grouped}'
 assert 'PayrollWorkbench' in app and 'TaxCalculator' in app
 assert 'AttendanceCorrections' in app and 'DocumentVault' in app and 'ReadinessCenter' in app
 assert 'DeveloperConsole' in app and '/developer/status' in app
-assert '<AI user={person}/>' in app
+assert '<FloatingAIBot open={aiDockOpen}' in app and "if(key==='assistant'){setAiDockOpen(true)" in app
 assert 'admin@demo.sass.local' not in app and 'Demo@12345' not in app
 assert 'demo' not in (ROOT/'server/create_admin.py').read_text().lower() or 'demo' not in (ROOT/'server/create_admin.py').read_text().split('def main')[0].lower()
 expected={
@@ -57,8 +57,9 @@ for module in ['career','voice','discipline','requestdesk']:
     assert f"key:'{module}'" in app and f"'{module}'" in groups
 assert "CultureModule" in app and (SRC/'CultureSuite.tsx').exists()
 culture_source=(SRC/'CultureSuite.tsx').read_text()
-for term in ['/career/plans','/voice/cases','/discipline/cases','/request-desk/requests']:
+for term in ['/career/plans','/voice/cases','/discipline/cases']:
     assert term in culture_source, f'Missing connected culture screen: {term}'
+assert '<ServiceCenter page={page}' in app and '/service-center/cases?' in (SRC/'ServiceCenter.tsx').read_text(encoding='utf-8')
 print(f'PASS design parity for SASS HRM v{release_version}: demo-reference palette + unified backgrounds; {len(reference)} original demo screens + Developer Console present; all navigation routes grouped.')
 print('PASS 1.5: Career Development, Employee Voice, Discipline and Request Desk screens/routes included.')
 print('NOTE: static checks do not prove browser visuals or networked MySQL integration.')

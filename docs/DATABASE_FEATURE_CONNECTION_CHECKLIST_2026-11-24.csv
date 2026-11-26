@@ -1,0 +1,74 @@
+﻿Feature,URL,Feature group,Route in client registry,Selected backend scenario exercised in isolated test,Live MySQL connection,All CRUD operations verified
+Overview,/workspace/overview,Workspace & personal tools,Yes,Not individually tested,Not tested,No
+Action center,/workspace/action-center,Workspace & personal tools,Yes,Not individually tested,Not tested,No
+Global HR search,/workspace/global-search,Workspace & personal tools,Yes,Not individually tested,Not tested,No
+HR data quality center,/people/data-quality-center,People & organization,Yes,Not individually tested,Not tested,No
+Workflow reminders,/workspace/workflow-reminders,Attendance & workforce scheduling,Yes,Not individually tested,Not tested,No
+Team leave planner,/workspace/team-leave-planner,Attendance & workforce scheduling,Yes,Not individually tested,Not tested,No
+My requests & shortcuts,/workspace/my-requests,Workspace & personal tools,Yes,Not individually tested,Not tested,No
+Notification inbox,/workspace/notifications,Workspace & personal tools,Yes,Not individually tested,Not tested,No
+My calendar,/workspace/calendar,Workspace & personal tools,Yes,Not individually tested,Not tested,No
+My profile,/workspace/my-profile,Workspace & personal tools,Yes,Not individually tested,Not tested,No
+Employee HRIS,/people/employee-hris,People & organization,Yes,Employee code edit + linked records,Not tested,No
+Organization chart,/people/organization-chart,People & organization,Yes,Not individually tested,Not tested,No
+Private contact profile,/people/private-contact-profile,People & organization,Yes,Not individually tested,Not tested,No
+Skills & competencies,/people/skills-competencies,People & organization,Yes,Not individually tested,Not tested,No
+Profile management,/people/profile-management,People & organization,Yes,Not individually tested,Not tested,No
+Account provisioning,/people/account-administration,People & organization,Yes,Employee code role restrictions and session revocation,Not tested,No
+Company setup & import,/people/company-setup-import,People & organization,Yes,Organization setup API regression previously tested in release; not rerun in this audit,Not tested,No
+Organization settings,/people/organization-settings,People & organization,Yes,Organization settings + offices,Not tested,No
+Administration settings center,/people/admin-settings-center,Workspace & personal tools,Yes,Not individually tested,Not tested,No
+Talent & service settings,/people/talent-service-settings,Workspace & personal tools,Yes,Not individually tested,Not tested,No
+Workflow settings,/people/workflow-settings,Workspace & personal tools,Yes,Not individually tested,Not tested,No
+Organization,/people/organization,People & organization,Yes,Offices/organization CRUD,Not tested,No
+Policies & handbook,/people/policies-handbook,"Compliance, security & reporting",Yes,Not individually tested,Not tested,No
+Policy acknowledgements,/people/policy-acknowledgements,"Compliance, security & reporting",Yes,Not individually tested,Not tested,No
+Reports & analytics,/people/reports-analytics,"Compliance, security & reporting",Yes,Not individually tested,Not tested,No
+Audit trail,/people/audit-trail,"Compliance, security & reporting",Yes,Not individually tested,Not tested,No
+HR operations center,/people/hr-operations-center,"Compliance, security & reporting",Yes,Not individually tested,Not tested,No
+Developer console,/people/developer-console,"Compliance, security & reporting",Yes,Database verification API tested with isolated SQLite database,Not tested,No
+Recruitment ATS,/talent/recruitment-ats,Hiring & talent operations,Yes,JD/ATS/hiring workflows,Not tested,No
+Candidate Search & Database,/talent/candidate-search-database,Hiring & talent operations,Yes,Candidate library + JD/ATS workflows,Not tested,No
+Interview scheduling,/talent/interview-scheduling,Hiring & talent operations,Yes,Hiring pipeline API workflows,Not tested,No
+Onboarding,/talent/onboarding,Hiring & talent operations,Yes,Hiring pipeline API workflows,Not tested,No
+Request Desk,/talent/request-desk,Hiring & talent operations,Yes,Employee services API workflows,Not tested,No
+HR helpdesk,/talent/hr-helpdesk,Hiring & talent operations,Yes,Not individually tested,Not tested,No
+HR tasks,/talent/hr-tasks,Hiring & talent operations,Yes,Not individually tested,Not tested,No
+HR task templates,/talent/hr-task-templates,Hiring & talent operations,Yes,Not individually tested,Not tested,No
+Offboarding,/talent/offboarding,Hiring & talent operations,Yes,Not individually tested,Not tested,No
+Leave management,/compensation/leave-management,Attendance & workforce scheduling,Yes,Not individually tested,Not tested,No
+Time & attendance,/compensation/time-attendance,Attendance & workforce scheduling,Yes,Not individually tested,Not tested,No
+Attendance corrections,/compensation/attendance-corrections,Attendance & workforce scheduling,Yes,Not individually tested,Not tested,No
+Shifts & schedules,/compensation/shifts-schedules,Attendance & workforce scheduling,Yes,Shift template and schedule CRUD,Not tested,No
+Project timesheets,/compensation/project-timesheets,Attendance & workforce scheduling,Yes,Not individually tested,Not tested,No
+Payroll workbench,/compensation/payroll-workbench,"Payroll, compensation & benefits",Yes,Compensation operations API readiness only,Not tested,No
+Compensation settings,/compensation/organization-settings,"Payroll, compensation & benefits",Yes,Not individually tested,Not tested,No
+Payslip archive,/compensation/payslip-archive,"Payroll, compensation & benefits",Yes,Not individually tested,Not tested,No
+Tax calculator · Global,/compensation/tax-calculator,"Payroll, compensation & benefits",Yes,Not individually tested,Not tested,No
+Benefits & programs,/compensation/benefits-programs,"Payroll, compensation & benefits",Yes,Compensation operations API workflows,Not tested,No
+Expenses & claims,/compensation/expenses-claims,"Payroll, compensation & benefits",Yes,Expense claims API workflow,Not tested,No
+Performance & goals,/culture/performance-goals,Performance & culture,Yes,Not individually tested,Not tested,No
+Performance review cycles,/culture/review-cycles,Performance & culture,Yes,Not individually tested,Not tested,No
+Employee appraisals,/culture/employee-appraisals,Performance & culture,Yes,Not individually tested,Not tested,No
+1:1 check-ins,/culture/one-on-one-checkins,Performance & culture,Yes,Not individually tested,Not tested,No
+Individual development plans,/culture/development-plans,Performance & culture,Yes,Not individually tested,Not tested,No
+Manager feedback requests,/culture/manager-feedback,Performance & culture,Yes,Not individually tested,Not tested,No
+Performance action tracker,/culture/performance-followups,Performance & culture,Yes,Not individually tested,Not tested,No
+Review cycle progress,/culture/review-progress,Performance & culture,Yes,Not individually tested,Not tested,No
+Performance evidence portfolio,/culture/performance-evidence,Performance & culture,Yes,Not individually tested,Not tested,No
+Goal check-in journal,/culture/goal-checkin-journal,Performance & culture,Yes,Not individually tested,Not tested,No
+Career development,/culture/career-development,Performance & culture,Yes,Culture suite API workflows,Not tested,No
+Learning & training,/culture/learning-training,Performance & culture,Yes,Not individually tested,Not tested,No
+Employee pulse,/culture/employee-pulse,Performance & culture,Yes,Not individually tested,Not tested,No
+Employee Voice,/culture/employee-voice,Performance & culture,Yes,Culture suite API workflows,Not tested,No
+Discipline & conduct,/culture/discipline-conduct,Performance & culture,Yes,Culture suite API workflows,Not tested,No
+Recognition wall,/culture/recognition-wall,Performance & culture,Yes,Not individually tested,Not tested,No
+Work arrangement requests,/culture/work-arrangements,Performance & culture,Yes,Not individually tested,Not tested,No
+Approval inbox,/services/approval-inbox,Employee services & approvals,Yes,Not individually tested,Not tested,No
+Asset management,/services/asset-management,Employee services & approvals,Yes,"Asset registry, maintenance and lifecycle APIs",Not tested,No
+Employee documents,/services/employee-documents,Employee services & approvals,Yes,Employee services API workflows,Not tested,No
+Secure document vault,/services/secure-document-vault,Employee services & approvals,Yes,Not individually tested,Not tested,No
+SASS AI Assistant,/ai/assistant,Workspace & personal tools,Yes,Not individually tested,Not tested,No
+My settings,/settings/my-workspace,Workspace & personal tools,Yes,Not individually tested,Not tested,No
+My account security,/settings/account-security,Workspace & personal tools,Yes,Not individually tested,Not tested,No
+Account sign-in review,/people/account-security-review,"Compliance, security & reporting",Yes,Not individually tested,Not tested,No

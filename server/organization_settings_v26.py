@@ -106,6 +106,17 @@ def office_values(body: Office):
             body.country.strip(), body.address.strip(), body.timezone, int(body.is_active))
 
 
+# Legacy modules still store free-text locations rather than office_id. A named office
+# cannot be removed or renamed while a linked record would become unrecognizable.
+OFFICE_LOCATION_TABLES = ('employees', 'departments', 'shifts', 'holidays', 'jobs')
+
+
+def office_references(conn, office_name: str) -> list[str]:
+    return [table for table in OFFICE_LOCATION_TABLES
+            if conn.execute(f'SELECT 1 FROM {table} WHERE LOWER(location)=LOWER(?) LIMIT 1',
+                            (office_name,)).fetchone()]
+
+
 def check_duplicates(conn, code: str, name: str, exclude: int = -1):
     row = conn.execute('''SELECT id FROM organization_offices
         WHERE (LOWER(code)=LOWER(?) OR LOWER(name)=LOWER(?)) AND id<>?''',
@@ -149,9 +160,11 @@ def update_office(office_id: int, body: Office, user=Depends(require_hr)):
                 raise HTTPException(404, 'Office not found')
             # Employees use textual location names. Renaming an occupied office could break
             # the location association, so ask HR to move employees before renaming.
-            assigned = conn.execute('SELECT COUNT(*) FROM employees WHERE location=?', (old['name'],)).fetchone()[0]
-            if assigned and (values[1] != old['name'] or not body.is_active):
-                raise HTTPException(409, 'Reassign employees before renaming or deactivating this office')
+            if (values[1] != old['name'] or not body.is_active):
+                references = office_references(conn, old['name'])
+                if references:
+                    raise HTTPException(409, 'Reassign linked ' + ', '.join(references) +
+                                        ' before renaming or deactivating this office')
             check_duplicates(conn, values[0], values[1], office_id)
             conn.execute('''UPDATE organization_offices SET code=?,name=?,city=?,country=?,
                 address=?,timezone=?,is_active=?,updated_at=?,updated_by=? WHERE id=?''',
@@ -160,6 +173,30 @@ def update_office(office_id: int, body: Office, user=Depends(require_hr)):
     except sqlite3.IntegrityError:
         raise HTTPException(409, 'Office code or name already exists')
     return {'message': 'Office updated'}
+
+
+class OfficeDelete(BaseModel):
+    confirm: Literal['DELETE']
+    reason: str = Field(min_length=5, max_length=500)
+
+
+@app.delete('/api/admin/organization/offices/{office_id}')
+def delete_office(office_id: int, body: OfficeDelete, user=Depends(require_hr)):
+    reason = body.reason.strip()
+    if len(reason) < 5:
+        raise HTTPException(422, 'Explain the reason for deleting this office (5+ characters)')
+    with db() as conn:
+        old = conn.execute('SELECT id,name FROM organization_offices WHERE id=?', (office_id,)).fetchone()
+        if old is None:
+            raise HTTPException(404, 'Office not found')
+        # Avoid orphaning free-text location references in other HR workflows.
+        references = office_references(conn, old['name'])
+        if references:
+            raise HTTPException(409, 'Reassign linked ' + ', '.join(references) +
+                                ' before deleting this office')
+        conn.execute('DELETE FROM organization_offices WHERE id=?', (office_id,))
+        audit(conn, user['id'], 'organization.office.deleted', f'office:{office_id}', reason)
+    return {'message': 'Office deleted'}
 
 
 @app.get('/api/organization/identity')

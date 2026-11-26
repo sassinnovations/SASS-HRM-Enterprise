@@ -3161,3 +3161,654 @@ CREATE TABLE IF NOT EXISTS expense_reimbursement_records (
   FOREIGN KEY (updated_by) REFERENCES employees(id),
   INDEX idx_expense_reimbursement_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 20: Recruitment JD library; safe, add-only and no data seeded.
+-- JD deletion is an authenticated API operation, never a database migration side effect.
+CREATE TABLE IF NOT EXISTS jd_import_batches (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  filename VARCHAR(191) NOT NULL,
+  content_sha256 CHAR(64) NOT NULL,
+  rows_received INT NOT NULL,
+  rows_imported INT NOT NULL,
+  rows_skipped INT NOT NULL,
+  imported_by BIGINT NOT NULL,
+  imported_at VARCHAR(191) NOT NULL,
+  FOREIGN KEY (imported_by) REFERENCES employees(id),
+  INDEX idx_jd_import_date (imported_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS recruitment_job_descriptions (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(191) NOT NULL,
+  description LONGTEXT NOT NULL,
+  department VARCHAR(191) NOT NULL DEFAULT '',
+  location VARCHAR(191) NOT NULL DEFAULT '',
+  employment_type VARCHAR(32) NOT NULL DEFAULT 'Full-time',
+  required_skills TEXT NOT NULL,
+  preferred_skills TEXT NOT NULL,
+  min_experience DOUBLE NOT NULL DEFAULT 0,
+  education VARCHAR(191) NOT NULL DEFAULT '',
+  status VARCHAR(20) NOT NULL DEFAULT 'Open',
+  job_opening_id BIGINT NULL,
+  import_batch_id BIGINT NULL,
+  dedup_key CHAR(64) NOT NULL,
+  created_by BIGINT NOT NULL,
+  updated_by BIGINT NOT NULL,
+  created_at VARCHAR(191) NOT NULL,
+  updated_at VARCHAR(191) NOT NULL,
+  UNIQUE KEY uq_job_description_content (dedup_key),
+  FOREIGN KEY (job_opening_id) REFERENCES jobs(id) ON DELETE SET NULL,
+  FOREIGN KEY (import_batch_id) REFERENCES jd_import_batches(id) ON DELETE SET NULL,
+  FOREIGN KEY (created_by) REFERENCES employees(id),
+  FOREIGN KEY (updated_by) REFERENCES employees(id),
+  INDEX idx_jd_status (status),
+  INDEX idx_jd_title (title),
+  INDEX idx_jd_batch (import_batch_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- SASS HRM — SASS INNOVATIONS ENTERPRISE | migration 21 | 243 -> 263 tables
+-- Additive schema-only foundations for recruitment, employee operations, attendance,
+-- payroll, expenses, assets, and integration data quality.
+-- Do not run the fresh installer against an existing database. Back up MySQL first.
+-- No existing table is altered. No records are inserted, updated, or deleted.
+-- Deleting a JD clears its nullable references below; no full JD description
+-- or candidate resume is duplicated in these schema-only foundations.
+
+-- Recruitment matching / human-review metadata (5).
+CREATE TABLE IF NOT EXISTS recruitment_match_runs (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  job_description_id BIGINT NULL,
+  scoring_version VARCHAR(48) NOT NULL,
+  candidate_count INT NOT NULL DEFAULT 0,
+  run_status VARCHAR(24) NOT NULL DEFAULT 'Queued',
+  requested_by BIGINT NOT NULL,
+  started_at DATETIME(6) NULL,
+  completed_at DATETIME(6) NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  FOREIGN KEY (job_description_id) REFERENCES recruitment_job_descriptions(id) ON DELETE SET NULL,
+  FOREIGN KEY (requested_by) REFERENCES employees(id),
+  CHECK (candidate_count >= 0),
+  INDEX idx_match_runs_jd (job_description_id,created_at),
+  INDEX idx_match_runs_status (run_status,created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS recruitment_match_results (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  run_id BIGINT NOT NULL,
+  candidate_id BIGINT NULL,
+  match_score DECIMAL(5,2) NOT NULL,
+  skill_match_score DECIMAL(5,2) NULL,
+  experience_match_score DECIMAL(5,2) NULL,
+  evidence_summary VARCHAR(1000) NOT NULL DEFAULT '',
+  reviewed_status VARCHAR(24) NOT NULL DEFAULT 'NotReviewed',
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  FOREIGN KEY (run_id) REFERENCES recruitment_match_runs(id),
+  FOREIGN KEY (candidate_id) REFERENCES candidates(id) ON DELETE SET NULL,
+  CHECK (match_score >= 0 AND match_score <= 100),
+  UNIQUE KEY uq_match_result_run_candidate (run_id,candidate_id),
+  INDEX idx_match_result_rank (run_id,match_score),
+  INDEX idx_match_result_review (reviewed_status,created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS recruitment_match_review_notes (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  match_result_id BIGINT NOT NULL,
+  reviewer_id BIGINT NOT NULL,
+  review_action VARCHAR(24) NOT NULL DEFAULT 'Comment',
+  review_note VARCHAR(1500) NOT NULL DEFAULT '',
+  reviewed_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  FOREIGN KEY (match_result_id) REFERENCES recruitment_match_results(id),
+  FOREIGN KEY (reviewer_id) REFERENCES employees(id),
+  INDEX idx_match_review_result (match_result_id,reviewed_at),
+  INDEX idx_match_review_actor (reviewer_id,reviewed_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS recruitment_jd_revision_markers (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  job_description_id BIGINT NULL,
+  revision_number INT NOT NULL,
+  content_sha256 CHAR(64) NOT NULL,
+  change_category VARCHAR(64) NOT NULL DEFAULT 'Content',
+  changed_by BIGINT NOT NULL,
+  recorded_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  FOREIGN KEY (job_description_id) REFERENCES recruitment_job_descriptions(id) ON DELETE SET NULL,
+  FOREIGN KEY (changed_by) REFERENCES employees(id),
+  CHECK (revision_number > 0),
+  UNIQUE KEY uq_jd_revision_number (job_description_id,revision_number),
+  INDEX idx_jd_revision_actor (changed_by,recorded_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS recruitment_jd_approval_requests (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  job_description_id BIGINT NULL,
+  decision_status VARCHAR(24) NOT NULL DEFAULT 'Pending',
+  request_reason VARCHAR(500) NOT NULL DEFAULT '',
+  requested_by BIGINT NOT NULL,
+  reviewer_id BIGINT NULL,
+  reviewed_at DATETIME(6) NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  FOREIGN KEY (job_description_id) REFERENCES recruitment_job_descriptions(id) ON DELETE SET NULL,
+  FOREIGN KEY (requested_by) REFERENCES employees(id),
+  FOREIGN KEY (reviewer_id) REFERENCES employees(id),
+  INDEX idx_jd_approval_status (decision_status,created_at),
+  INDEX idx_jd_approval_jd (job_description_id,created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Candidate applications, shortlisting, and interview changes (3).
+CREATE TABLE IF NOT EXISTS candidate_application_links (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  candidate_id BIGINT NULL,
+  job_description_id BIGINT NULL,
+  application_status VARCHAR(32) NOT NULL DEFAULT 'Applied',
+  application_source VARCHAR(80) NOT NULL DEFAULT 'Manual',
+  linked_by BIGINT NOT NULL,
+  linked_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  FOREIGN KEY (candidate_id) REFERENCES candidates(id) ON DELETE SET NULL,
+  FOREIGN KEY (job_description_id) REFERENCES recruitment_job_descriptions(id) ON DELETE SET NULL,
+  FOREIGN KEY (linked_by) REFERENCES employees(id),
+  UNIQUE KEY uq_candidate_jd_link (candidate_id,job_description_id),
+  INDEX idx_candidate_app_status (application_status,linked_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS candidate_interview_schedule_changes (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  interview_id BIGINT NULL,
+  previous_schedule_at DATETIME(6) NULL,
+  new_schedule_at DATETIME(6) NOT NULL,
+  reschedule_reason VARCHAR(600) NOT NULL,
+  requested_by BIGINT NOT NULL,
+  acknowledged_by BIGINT NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  FOREIGN KEY (interview_id) REFERENCES interviews(id) ON DELETE SET NULL,
+  FOREIGN KEY (requested_by) REFERENCES employees(id),
+  FOREIGN KEY (acknowledged_by) REFERENCES employees(id),
+  INDEX idx_interview_schedule_change (interview_id,created_at),
+  INDEX idx_interview_reschedule_time (new_schedule_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS candidate_shortlist_decisions (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  candidate_id BIGINT NULL,
+  job_description_id BIGINT NULL,
+  decision VARCHAR(24) NOT NULL DEFAULT 'Review',
+  rationale VARCHAR(1200) NOT NULL DEFAULT '',
+  decided_by BIGINT NOT NULL,
+  decided_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  FOREIGN KEY (candidate_id) REFERENCES candidates(id) ON DELETE SET NULL,
+  FOREIGN KEY (job_description_id) REFERENCES recruitment_job_descriptions(id) ON DELETE SET NULL,
+  FOREIGN KEY (decided_by) REFERENCES employees(id),
+  INDEX idx_shortlist_candidate (candidate_id,decided_at),
+  INDEX idx_shortlist_jd (job_description_id,decision)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Employee onboarding and HR-case review (3).
+CREATE TABLE IF NOT EXISTS employee_onboarding_task_assignments (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  onboarding_id BIGINT NULL,
+  employee_id BIGINT NOT NULL,
+  assigned_to BIGINT NOT NULL,
+  task_label VARCHAR(191) NOT NULL,
+  due_on DATE NULL,
+  completion_status VARCHAR(24) NOT NULL DEFAULT 'Pending',
+  completed_at DATETIME(6) NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  FOREIGN KEY (onboarding_id) REFERENCES onboarding(id) ON DELETE SET NULL,
+  FOREIGN KEY (employee_id) REFERENCES employees(id),
+  FOREIGN KEY (assigned_to) REFERENCES employees(id),
+  INDEX idx_onboarding_assignment (employee_id,completion_status),
+  INDEX idx_onboarding_due (due_on,completion_status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS employee_employment_verification_requests (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  employee_id BIGINT NOT NULL,
+  request_type VARCHAR(64) NOT NULL,
+  external_reference VARCHAR(191) NOT NULL DEFAULT '',
+  request_status VARCHAR(24) NOT NULL DEFAULT 'Pending',
+  requested_by BIGINT NOT NULL,
+  verified_by BIGINT NULL,
+  verified_at DATETIME(6) NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  FOREIGN KEY (employee_id) REFERENCES employees(id),
+  FOREIGN KEY (requested_by) REFERENCES employees(id),
+  FOREIGN KEY (verified_by) REFERENCES employees(id),
+  INDEX idx_employment_verify_employee (employee_id,created_at),
+  INDEX idx_employment_verify_status (request_status,created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS employee_policy_exception_requests (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  employee_id BIGINT NOT NULL,
+  policy_id BIGINT NULL,
+  exception_type VARCHAR(80) NOT NULL,
+  justification VARCHAR(1200) NOT NULL,
+  decision_status VARCHAR(24) NOT NULL DEFAULT 'Pending',
+  requested_by BIGINT NOT NULL,
+  approved_by BIGINT NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  FOREIGN KEY (employee_id) REFERENCES employees(id),
+  FOREIGN KEY (policy_id) REFERENCES policies(id) ON DELETE SET NULL,
+  FOREIGN KEY (requested_by) REFERENCES employees(id),
+  FOREIGN KEY (approved_by) REFERENCES employees(id),
+  INDEX idx_policy_exception_employee (employee_id,decision_status),
+  INDEX idx_policy_exception_policy (policy_id,created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Time and leave governance (2).
+CREATE TABLE IF NOT EXISTS attendance_location_exception_reviews (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  attendance_id BIGINT NULL,
+  employee_id BIGINT NOT NULL,
+  site_code VARCHAR(80) NOT NULL DEFAULT '',
+  exception_reason VARCHAR(600) NOT NULL,
+  review_status VARCHAR(24) NOT NULL DEFAULT 'Pending',
+  requested_by BIGINT NOT NULL,
+  reviewed_by BIGINT NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  FOREIGN KEY (attendance_id) REFERENCES attendance(id) ON DELETE SET NULL,
+  FOREIGN KEY (employee_id) REFERENCES employees(id),
+  FOREIGN KEY (requested_by) REFERENCES employees(id),
+  FOREIGN KEY (reviewed_by) REFERENCES employees(id),
+  INDEX idx_att_location_employee (employee_id,created_at),
+  INDEX idx_att_location_status (review_status,created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS leave_request_approval_steps (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  leave_request_id BIGINT NOT NULL,
+  step_number INT NOT NULL,
+  reviewer_id BIGINT NOT NULL,
+  decision VARCHAR(24) NOT NULL DEFAULT 'Pending',
+  decision_reason VARCHAR(700) NOT NULL DEFAULT '',
+  decided_at DATETIME(6) NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  FOREIGN KEY (leave_request_id) REFERENCES leave_requests(id),
+  FOREIGN KEY (reviewer_id) REFERENCES employees(id),
+  CHECK (step_number > 0),
+  UNIQUE KEY uq_leave_approval_step (leave_request_id,step_number),
+  INDEX idx_leave_approval_review (reviewer_id,decision)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Payroll preflight and statutory filing evidence (2).
+CREATE TABLE IF NOT EXISTS payroll_preflight_validation_results (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  pay_run_id BIGINT NOT NULL,
+  rule_code VARCHAR(80) NOT NULL,
+  severity VARCHAR(24) NOT NULL DEFAULT 'Warning',
+  resolution_status VARCHAR(24) NOT NULL DEFAULT 'Open',
+  issue_count INT NOT NULL DEFAULT 0,
+  validated_by BIGINT NOT NULL,
+  validated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  FOREIGN KEY (pay_run_id) REFERENCES pay_runs_v2(id),
+  FOREIGN KEY (validated_by) REFERENCES employees(id),
+  CHECK (issue_count >= 0),
+  INDEX idx_preflight_run (pay_run_id,severity),
+  INDEX idx_preflight_status (resolution_status,validated_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS payroll_statutory_filing_receipts (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  pay_run_id BIGINT NOT NULL,
+  filing_category VARCHAR(64) NOT NULL,
+  filing_period VARCHAR(24) NOT NULL,
+  receipt_reference VARCHAR(191) NOT NULL,
+  filed_on DATE NOT NULL,
+  recorded_by BIGINT NOT NULL,
+  recorded_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  FOREIGN KEY (pay_run_id) REFERENCES pay_runs_v2(id),
+  FOREIGN KEY (recorded_by) REFERENCES employees(id),
+  UNIQUE KEY uq_statutory_receipt_ref (filing_category,filing_period,receipt_reference),
+  INDEX idx_statutory_payrun (pay_run_id,filed_on)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Expense receipt review (1): references only, no stored receipt bytes.
+CREATE TABLE IF NOT EXISTS expense_receipt_verification_cases (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  expense_id BIGINT NOT NULL,
+  receipt_reference VARCHAR(191) NOT NULL DEFAULT '',
+  verification_status VARCHAR(24) NOT NULL DEFAULT 'Pending',
+  exception_code VARCHAR(64) NOT NULL DEFAULT '',
+  reviewed_by BIGINT NULL,
+  verified_at DATETIME(6) NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  FOREIGN KEY (expense_id) REFERENCES expenses(id),
+  FOREIGN KEY (reviewed_by) REFERENCES employees(id),
+  INDEX idx_expense_receipt_case (expense_id,created_at),
+  INDEX idx_expense_receipt_status (verification_status,created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Asset stocktakes (2).
+CREATE TABLE IF NOT EXISTS asset_stocktake_sessions (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  session_label VARCHAR(191) NOT NULL,
+  location_code VARCHAR(120) NOT NULL DEFAULT '',
+  session_status VARCHAR(24) NOT NULL DEFAULT 'Draft',
+  started_by BIGINT NOT NULL,
+  confirmed_by BIGINT NULL,
+  started_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  closed_at DATETIME(6) NULL,
+  FOREIGN KEY (started_by) REFERENCES employees(id),
+  FOREIGN KEY (confirmed_by) REFERENCES employees(id),
+  INDEX idx_stocktake_status (session_status,started_at),
+  INDEX idx_stocktake_location (location_code,started_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS asset_stocktake_items (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  session_id BIGINT NOT NULL,
+  asset_id BIGINT NOT NULL,
+  observed_condition VARCHAR(32) NOT NULL DEFAULT 'Unverified',
+  observed_location VARCHAR(120) NOT NULL DEFAULT '',
+  variance_reason VARCHAR(500) NOT NULL DEFAULT '',
+  counted_by BIGINT NULL,
+  counted_at DATETIME(6) NULL,
+  FOREIGN KEY (session_id) REFERENCES asset_stocktake_sessions(id),
+  FOREIGN KEY (asset_id) REFERENCES assets(id),
+  FOREIGN KEY (counted_by) REFERENCES employees(id),
+  UNIQUE KEY uq_stocktake_session_asset (session_id,asset_id),
+  INDEX idx_stocktake_item_asset (asset_id,counted_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Inbound integration import metadata and row-level failures (2).
+CREATE TABLE IF NOT EXISTS integration_import_batches (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  connector_name VARCHAR(120) NOT NULL,
+  external_batch_reference VARCHAR(191) NOT NULL DEFAULT '',
+  payload_sha256 CHAR(64) NOT NULL,
+  imported_count INT NOT NULL DEFAULT 0,
+  failed_count INT NOT NULL DEFAULT 0,
+  batch_status VARCHAR(24) NOT NULL DEFAULT 'Received',
+  initiated_by BIGINT NULL,
+  received_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  FOREIGN KEY (initiated_by) REFERENCES employees(id) ON DELETE SET NULL,
+  CHECK (imported_count >= 0 AND failed_count >= 0),
+  INDEX idx_integration_batch_source (connector_name,received_at),
+  INDEX idx_integration_batch_status (batch_status,received_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS integration_import_row_errors (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  batch_id BIGINT NOT NULL,
+  source_row_number BIGINT NOT NULL,
+  field_key VARCHAR(120) NOT NULL,
+  error_code VARCHAR(80) NOT NULL,
+  error_status VARCHAR(24) NOT NULL DEFAULT 'Open',
+  resolved_by BIGINT NULL,
+  resolved_at DATETIME(6) NULL,
+  FOREIGN KEY (batch_id) REFERENCES integration_import_batches(id),
+  FOREIGN KEY (resolved_by) REFERENCES employees(id) ON DELETE SET NULL,
+  CHECK (source_row_number > 0),
+  INDEX idx_integration_error_batch (batch_id,source_row_number),
+  INDEX idx_integration_error_status (error_status,error_code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- SASS HRM — SASS INNOVATIONS ENTERPRISE | migration 22 | database verification history
+-- Safe add-only operational schema for persisted administrative connectivity checks.
+CREATE TABLE IF NOT EXISTS database_verification_runs (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  run_status VARCHAR(24) NOT NULL,
+  expected_tables INT NOT NULL DEFAULT 0,
+  present_tables INT NOT NULL DEFAULT 0,
+  missing_tables INT NOT NULL DEFAULT 0,
+  missing_columns INT NOT NULL DEFAULT 0,
+  missing_indexes INT NOT NULL DEFAULT 0,
+  missing_foreign_keys INT NOT NULL DEFAULT 0,
+  access_failures INT NOT NULL DEFAULT 0,
+  requested_by BIGINT NOT NULL,
+  checked_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  FOREIGN KEY (requested_by) REFERENCES employees(id),
+  INDEX idx_database_checks_time (checked_at),
+  INDEX idx_database_checks_status (run_status,checked_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS database_verification_findings (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  run_id BIGINT NOT NULL,
+  finding_type VARCHAR(40) NOT NULL,
+  object_name VARCHAR(191) NOT NULL,
+  checked_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  FOREIGN KEY (run_id) REFERENCES database_verification_runs(id),
+  INDEX idx_database_findings_run (run_id,finding_type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS database_module_checks (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  run_id BIGINT NOT NULL,
+  module_name VARCHAR(120) NOT NULL,
+  required_count INT NOT NULL DEFAULT 0,
+  present_count INT NOT NULL DEFAULT 0,
+  missing_names VARCHAR(2048) NOT NULL DEFAULT '',
+  FOREIGN KEY (run_id) REFERENCES database_verification_runs(id),
+  UNIQUE KEY uq_database_module_run (run_id,module_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- v5.5 AI copilot. Article publication is admin-managed; proposals are short-lived and user-bound.
+CREATE TABLE IF NOT EXISTS ai_knowledge_articles (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(190) NOT NULL, category VARCHAR(100) NOT NULL,
+  content LONGTEXT NOT NULL, status VARCHAR(24) NOT NULL DEFAULT 'Draft',
+  created_by BIGINT NOT NULL, created_at VARCHAR(40) NOT NULL, updated_at VARCHAR(40) NOT NULL,
+  INDEX idx_ai_knowledge_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS ai_knowledge_scopes (
+  article_id BIGINT NOT NULL PRIMARY KEY,
+  feature_key VARCHAR(80) NOT NULL DEFAULT '',
+  audience VARCHAR(16) NOT NULL DEFAULT 'All',
+  INDEX idx_ai_scope_feature (feature_key,audience),
+  FOREIGN KEY (article_id) REFERENCES ai_knowledge_articles(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS ai_action_proposals (
+  id VARCHAR(48) NOT NULL PRIMARY KEY, actor_id BIGINT NOT NULL,
+  operation VARCHAR(80) NOT NULL, args_json LONGTEXT NOT NULL,
+  preview LONGTEXT NOT NULL, state VARCHAR(24) NOT NULL DEFAULT 'Pending',
+  created_at VARCHAR(40) NOT NULL, expires_at VARCHAR(40) NOT NULL,
+  result_json LONGTEXT NOT NULL,
+  INDEX idx_ai_action_owner (actor_id,state),
+  FOREIGN KEY (actor_id) REFERENCES employees(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Additive schema: official work detail change approval requests (all three account types).
+-- Apply once to an existing production MySQL schema before deploying the new backend.
+CREATE TABLE IF NOT EXISTS official_work_detail_requests (
+ id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ employee_id BIGINT NOT NULL,
+ payload_json TEXT NOT NULL,
+ baseline_json TEXT NOT NULL,
+ change_reason VARCHAR(450) NOT NULL,
+ status VARCHAR(20) NOT NULL DEFAULT 'Pending',
+ requested_at VARCHAR(48) NOT NULL,
+ reviewed_by BIGINT NULL,
+ reviewed_at VARCHAR(48) NULL,
+ review_note VARCHAR(450) NOT NULL DEFAULT '',
+ INDEX idx_official_detail_requests_employee (employee_id,status),
+ INDEX idx_official_detail_requests_status (status,requested_at),
+ CONSTRAINT fk_official_change_employee FOREIGN KEY (employee_id) REFERENCES employees(id),
+ CONSTRAINT fk_official_change_reviewer FOREIGN KEY (reviewed_by) REFERENCES employees(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Add-only product catalog and project register. Equipment is unchanged.
+CREATE TABLE IF NOT EXISTS hrm_work_catalog (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    kind VARCHAR(12) NOT NULL,
+    code VARCHAR(48) NOT NULL,
+    name VARCHAR(160) NOT NULL,
+    description TEXT NOT NULL,
+    status VARCHAR(24) NOT NULL,
+    category VARCHAR(80) NOT NULL,
+    owner_id BIGINT NULL,
+    start_date VARCHAR(10) NULL,
+    end_date VARCHAR(10) NULL,
+    created_at VARCHAR(40) NOT NULL,
+    updated_at VARCHAR(40) NOT NULL,
+    archived_at VARCHAR(40) NULL,
+    UNIQUE KEY ux_hrm_work_catalog_kind_code (kind,code),
+    INDEX idx_hrm_work_catalog_visible (kind,archived_at,id),
+    CONSTRAINT fk_hrm_work_catalog_owner FOREIGN KEY (owner_id) REFERENCES employees(id) ON DELETE SET NULL,
+    CONSTRAINT ck_hrm_work_catalog_kind CHECK (kind IN ('products','projects'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS hrm_work_catalog_settings (
+    kind VARCHAR(12) NOT NULL PRIMARY KEY,
+    default_status VARCHAR(24) NOT NULL,
+    categories_json TEXT NOT NULL,
+    CONSTRAINT ck_hrm_work_catalog_settings_kind CHECK (kind IN ('products','projects'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Employee-owned drafts and request history preferences. Additive; no workflow rows altered.
+CREATE TABLE IF NOT EXISTS self_service_preferences (
+  employee_id BIGINT NOT NULL PRIMARY KEY,
+  default_kind VARCHAR(32) NOT NULL,
+  default_status VARCHAR(16) NOT NULL,
+  page_size INT NOT NULL,
+  FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS self_service_drafts (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  employee_id BIGINT NOT NULL,
+  kind VARCHAR(32) NOT NULL,
+  title VARCHAR(150) NOT NULL,
+  notes TEXT NOT NULL,
+  created_at VARCHAR(48) NOT NULL,
+  updated_at VARCHAR(48) NOT NULL,
+  KEY idx_self_service_drafts_owner(employee_id,updated_at,id),
+  FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Private calendar preferences and personal inbox reminders.
+CREATE TABLE IF NOT EXISTS employee_calendar_preferences (
+ employee_id BIGINT NOT NULL PRIMARY KEY,
+ week_start VARCHAR(9) NOT NULL DEFAULT 'monday',
+ visibility VARCHAR(12) NOT NULL DEFAULT 'all',
+ default_start_time VARCHAR(5) NOT NULL DEFAULT '',
+ include_private_export TINYINT(1) NOT NULL DEFAULT 0,
+ CONSTRAINT fk_calendar_preferences_employee FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS employee_inbox_reminders (
+ id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ employee_id BIGINT NOT NULL,
+ title VARCHAR(120) NOT NULL,
+ body VARCHAR(1200) NOT NULL,
+ due_date VARCHAR(10) NULL,
+ is_done TINYINT NOT NULL DEFAULT 0,
+ created_at VARCHAR(48) NOT NULL,
+ updated_at VARCHAR(48) NOT NULL,
+ INDEX idx_inbox_reminders_employee(employee_id,id),
+ FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Personal account-security display preferences and private review checklist.
+CREATE TABLE IF NOT EXISTS employee_security_preferences (
+ employee_id BIGINT NOT NULL PRIMARY KEY,
+ history_limit INT NOT NULL DEFAULT 30,
+ display_timezone VARCHAR(12) NOT NULL DEFAULT 'local',
+ FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS employee_security_checklist (
+ id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ employee_id BIGINT NOT NULL,
+ title VARCHAR(120) NOT NULL,
+ due_on VARCHAR(10) NULL,
+ completed INT NOT NULL DEFAULT 0,
+ updated_at VARCHAR(64) NOT NULL,
+ FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE CASCADE,
+ INDEX idx_sec_checklist_employee(employee_id, completed, due_on, id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Manual coverage plans are advisory and never write leave requests.
+CREATE TABLE IF NOT EXISTS leave_coverage_warning_options (
+ id BIGINT NOT NULL PRIMARY KEY,
+ weekdays_only TINYINT NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS leave_coverage_manual_plans (
+ id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ label VARCHAR(100) NOT NULL,
+ primary_employee_id BIGINT NOT NULL,
+ backup_employee_id BIGINT NOT NULL,
+ starts_on VARCHAR(10) NOT NULL,
+ ends_on VARCHAR(10) NOT NULL,
+ status VARCHAR(16) NOT NULL,
+ notes VARCHAR(500) NOT NULL DEFAULT '',
+ revision INT NOT NULL DEFAULT 1,
+ deleted_at VARCHAR(48),
+ KEY ix_leave_coverage_plans_window (deleted_at,starts_on,ends_on),
+ FOREIGN KEY(primary_employee_id) REFERENCES employees(id),
+ FOREIGN KEY(backup_employee_id) REFERENCES employees(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- Per-account display preferences for the Team leave & coverage planner.
+CREATE TABLE IF NOT EXISTS leave_coverage_personal_preferences (
+ employee_id BIGINT NOT NULL PRIMARY KEY,
+ default_department VARCHAR(191),
+ show_holidays TINYINT NOT NULL DEFAULT 1,
+ plan_status VARCHAR(16) NOT NULL DEFAULT 'All',
+ my_assignments_only TINYINT NOT NULL DEFAULT 0,
+ FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Private draft stage and pin metadata; existing drafts keep their default stage.
+CREATE TABLE IF NOT EXISTS self_service_draft_organization (
+  draft_id BIGINT NOT NULL PRIMARY KEY,
+  stage VARCHAR(16) NOT NULL CHECK(stage IN ('drafting','ready')),
+  pinned TINYINT NOT NULL CHECK(pinned IN (0,1)),
+  updated_at VARCHAR(48) NOT NULL,
+  FOREIGN KEY(draft_id) REFERENCES self_service_drafts(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Owner-only initial filters, order and page size for the notification inbox.
+CREATE TABLE IF NOT EXISTS employee_inbox_display_defaults (
+ employee_id BIGINT NOT NULL PRIMARY KEY,
+ notification_order VARCHAR(8) NOT NULL DEFAULT 'newest',
+ notification_page_size INT NOT NULL DEFAULT 25,
+ reminder_view VARCHAR(12) NOT NULL DEFAULT 'open',
+ FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Account-owned event categories. Deleting a category removes only assignments.
+CREATE TABLE IF NOT EXISTS employee_calendar_categories (
+ id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ employee_id BIGINT NOT NULL,
+ name VARCHAR(48) NOT NULL,
+ name_key VARCHAR(160) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+ color VARCHAR(12) NOT NULL DEFAULT 'blue',
+ UNIQUE KEY uq_employee_calendar_category_name(employee_id,name_key),
+ CONSTRAINT fk_calendar_category_employee FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS personal_calendar_event_categories (
+ event_id BIGINT NOT NULL PRIMARY KEY,
+ category_id BIGINT NOT NULL,
+ INDEX idx_calendar_category_events(category_id),
+ CONSTRAINT fk_calendar_tag_event FOREIGN KEY(event_id) REFERENCES personal_calendar_events(id) ON DELETE CASCADE,
+ CONSTRAINT fk_calendar_tag_category FOREIGN KEY(category_id) REFERENCES employee_calendar_categories(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Personal Security checklist settings; no device, credential, or audit data.
+CREATE TABLE IF NOT EXISTS employee_security_checklist_settings (
+ employee_id BIGINT NOT NULL PRIMARY KEY,
+ status_filter VARCHAR(12) NOT NULL DEFAULT 'all',
+ sort_order VARCHAR(12) NOT NULL DEFAULT 'due',
+ default_due VARCHAR(12) NOT NULL DEFAULT 'none',
+ FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Personal default draft view; independent of submitted history preferences.
+CREATE TABLE IF NOT EXISTS self_service_draft_views (
+  employee_id BIGINT NOT NULL PRIMARY KEY,
+  module_filter VARCHAR(32) NOT NULL,
+  draft_view VARCHAR(16) NOT NULL CHECK(draft_view IN ('all','drafting','ready','pinned')),
+  sort_order VARCHAR(16) NOT NULL CHECK(sort_order IN ('newest','oldest','title')),
+  FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Employee-owned default calendar layout and agenda range.
+CREATE TABLE IF NOT EXISTS employee_calendar_agenda_preferences (
+ employee_id BIGINT NOT NULL PRIMARY KEY,
+ preferred_view VARCHAR(12) NOT NULL DEFAULT 'month',
+ agenda_days INTEGER NOT NULL DEFAULT 14,
+ CONSTRAINT fk_calendar_agenda_preferences_employee FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

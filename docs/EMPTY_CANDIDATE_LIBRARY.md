@@ -4,8 +4,9 @@
 
 The ZIP contains **no candidate workbook, no 7,435-row SQL seed, and no auto-import**.
 Candidate Search, job-role dropdowns, hiring stage windows, filtering, sorting, CSV
-export and Excel upload remain available. The job-role suggestion catalog holds
-only 29 job-title labels, **zero applicant records**.
+export and Excel upload remain available. The former 29-label job-role suggestion catalog has been removed. Job role options
+are derived only from existing candidate records: an empty candidate library has
+**zero candidates and zero available job roles**.
 
 A **fresh** MySQL deployment starts with **zero candidates**. This software update
 **does not erase records already in your live MySQL**. SASS HRM retains your existing
@@ -30,7 +31,8 @@ administrator explicitly clears it.
    removes all candidate rows, imported workbook archives, and associated
    hiring-stage reviews/events in one transaction, then writes an HR audit entry.
 6. Refresh Candidate Search; **Total candidates = 0**, import history empty,
-   and the seven hiring stage counters show 0. Verify the live MySQL counts with
+   and the seven hiring stage counters show 0. The **Job role** filter shows
+   **All job roles (0)**. Verify the live MySQL counts with
    `VERIFY_ZERO_CANDIDATES.bat` from this folder.
 
 Employees, job opening records, HR accounts, payroll, historical payslips and the
@@ -46,7 +48,8 @@ Candidate linked interviews and recruitment activity are protected, not cleared.
 - Alternatively use `IMPORT_CANDIDATES_TO_MYSQL.bat "C:\path\new_candidates.xlsx"`
   after the backend/MySQL are configured. Supplying a file path is mandatory.
 - You can add individual candidates and edit/delete them from the same page.
-- Existing job roles can be selected, and new role names can be entered.
+- Existing candidate job roles can be selected, and new role names can be entered.
+  No roles are preloaded; clearing all candidates clears the role options.
 
 ## Verification and limitations
 

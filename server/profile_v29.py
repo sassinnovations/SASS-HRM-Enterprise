@@ -6,13 +6,14 @@ payroll, authentication credentials and HR work-history metadata.
 from __future__ import annotations
 
 import re
+import json
 from datetime import datetime, timezone
 from io import BytesIO
 from typing import Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from fastapi import Depends, HTTPException, Request, Response
 from PIL import Image, ImageOps, UnidentifiedImageError
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from main import app, db, rows, current_user, require_hr, audit
 from enterprise import inform
 
@@ -61,6 +62,20 @@ def initialize_profile_v29():
           review_note TEXT NOT NULL DEFAULT ''
         );
         CREATE INDEX IF NOT EXISTS idx_profile_changes_owner ON profile_change_requests(employee_id,status);
+        CREATE TABLE IF NOT EXISTS official_work_detail_requests (
+          id INTEGER PRIMARY KEY,
+          employee_id INTEGER NOT NULL REFERENCES employees(id),
+          payload_json TEXT NOT NULL,
+          baseline_json TEXT NOT NULL,
+          change_reason TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'Pending',
+          requested_at TEXT NOT NULL,
+          reviewed_by INTEGER REFERENCES employees(id),
+          reviewed_at TEXT,
+          review_note TEXT NOT NULL DEFAULT ''
+        );
+        CREATE INDEX IF NOT EXISTS idx_official_detail_requests_employee ON official_work_detail_requests(employee_id,status);
+        CREATE INDEX IF NOT EXISTS idx_official_detail_requests_status ON official_work_detail_requests(status,requested_at);
         ''')
 
 
@@ -141,6 +156,7 @@ def professional_payload(row: dict) -> dict:
 
 _PROFILE_SQL = '''SELECT e.id,e.code,e.name,e.email,e.work_email,e.role,e.designation,e.department,
           e.location,e.work_mode,e.join_date,e.manager_id,
+          COALESCE((SELECT t.tier FROM account_access_tiers t WHERE t.employee_id=e.id LIMIT 1),e.role) AS access_tier,
           COALESCE(p.preferred_name,'') AS preferred_name,
           COALESCE(p.headline,'') AS headline,
           COALESCE(p.biography,'') AS biography,
@@ -360,6 +376,123 @@ def decide_profile_correction(request_id:int,body:CorrectionDecision,user=Depend
             conn.execute('UPDATE employees SET name=? WHERE id=?',(request['requested_value'],request['employee_id']))
         audit(conn,user['id'],'profile.correction.'+body.decision.lower(),f'profile_change_request:{request_id}','name')
         inform(conn,request['employee_id'],'Profile correction reviewed',f'Your official name correction was {body.decision.lower()}.')
+        return {'status':body.decision,'request_id':request_id}
+
+
+# Official employment details: employees and HR Sub-Admins propose changes; an
+# HR Administrator reviews them. The existing admin editor remains immediate.
+OFFICIAL_FIELDS = ('code','name','work_email','designation','department','location','work_mode','join_date')
+
+class OfficialDetailsRequestIn(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    code: str = Field(min_length=3,max_length=50)
+    name: str = Field(min_length=2,max_length=100)
+    work_email: str = Field(min_length=6,max_length=200)
+    designation: str = Field(min_length=2,max_length=120)
+    department: str = Field(min_length=2,max_length=100)
+    location: str = Field(min_length=2,max_length=100)
+    work_mode: Literal['Remote','Hybrid','On-site']
+    join_date: str = Field(pattern=r'^\d{4}-\d{2}-\d{2}$')
+    change_reason: str = Field(min_length=6,max_length=450)
+
+
+def _official_snapshot(row):
+    return {key: str(row[key] if row[key] is not None else '')[:10] if key=='join_date' else str(row[key] or '') for key in OFFICIAL_FIELDS}
+
+
+def _normalize_official_request(body:OfficialDetailsRequestIn):
+    from accounts_v25 import EMAIL
+    from datetime import date
+    values={key:getattr(body,key).strip() if isinstance(getattr(body,key),str) else getattr(body,key) for key in OFFICIAL_FIELDS}
+    values['work_email']=values['work_email'].lower()
+    if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{2,49}', values['code']):
+        raise HTTPException(422,'Invalid employee code')
+    if not EMAIL.fullmatch(values['work_email']):
+        raise HTTPException(422,'Enter a valid work email')
+    if any(len(values[k])<2 for k in ('name','designation','department','location')):
+        raise HTTPException(422,'Official work details require at least two characters')
+    try:
+        date.fromisoformat(values['join_date'])
+    except ValueError:
+        raise HTTPException(422,'Enter a valid joining date') from None
+    return values
+
+
+@app.get('/api/profile/me/official-change-requests')
+def my_official_changes(user=Depends(current_user)):
+    with db() as conn:
+        results=rows(conn.execute('''SELECT id,payload_json,change_reason,status,requested_at,
+          reviewed_at,review_note FROM official_work_detail_requests
+          WHERE employee_id=? ORDER BY id DESC LIMIT 50''',(user['id'],)))
+    for item in results:
+        item['requested_fields']=json.loads(item.pop('payload_json'))
+    return results
+
+
+@app.post('/api/profile/me/official-change-requests',status_code=201)
+def propose_official_changes(body:OfficialDetailsRequestIn,user=Depends(current_user)):
+    values=_normalize_official_request(body)
+    if user['role']=='admin':
+        raise HTTPException(403,'HR administrators use Save official details for immediate authorized changes')
+    reason=body.change_reason.strip()
+    if len(reason)<6:raise HTTPException(422,'Provide a change reason of at least 6 characters')
+    with db() as conn:
+        row=conn.execute('''SELECT code,name,work_email,designation,department,location,work_mode,join_date
+          FROM employees WHERE id=? AND account_active=1''',(user['id'],)).fetchone()
+        if row is None:raise HTTPException(404,'Employee account not found')
+        existing=_official_snapshot(row)
+        requested={key:value for key,value in values.items() if value != existing[key]}
+        if not requested:raise HTTPException(422,'Change at least one official field before submitting')
+        if conn.execute("SELECT 1 FROM official_work_detail_requests WHERE employee_id=? AND status='Pending' LIMIT 1",(user['id'],)).fetchone():
+            raise HTTPException(409,'You already have a pending official-details request')
+        result=conn.execute('''INSERT INTO official_work_detail_requests
+            (employee_id,payload_json,baseline_json,change_reason,status,requested_at)
+            VALUES(?,?,?,?,?,?)''', (user['id'],json.dumps(requested,ensure_ascii=False),
+                  json.dumps(existing,ensure_ascii=False),reason,'Pending',utcnow()))
+        audit(conn,user['id'],'profile.official_change.requested',f'official_work_detail_request:{result.lastrowid}',
+              'Requested fields: '+','.join(requested))
+        return {'id':result.lastrowid,'status':'Pending','requested_fields':requested}
+
+
+@app.get('/api/profile/admin/official-change-requests')
+def review_official_changes_list(user=Depends(require_hr)):
+    with db() as conn:
+        results=rows(conn.execute('''SELECT r.id,r.employee_id,e.name AS employee_name,e.email AS employee_email,
+           r.payload_json,r.change_reason,r.status,r.requested_at,r.reviewed_at,r.review_note
+           FROM official_work_detail_requests r JOIN employees e ON e.id=r.employee_id
+           ORDER BY r.id DESC LIMIT 200'''))
+    for item in results:
+        item['requested_fields']=json.loads(item.pop('payload_json'))
+    return results
+
+
+@app.post('/api/profile/admin/official-change-requests/{request_id}/decision')
+def decide_official_changes(request_id:int,body:CorrectionDecision,user=Depends(require_hr)):
+    from accounts_v25 import AccountProfileEdit, apply_official_profile_change
+    with db() as conn:
+        request=conn.execute('SELECT * FROM official_work_detail_requests WHERE id=?',(request_id,)).fetchone()
+        if request is None:raise HTTPException(404,'Official-details request not found')
+        if request['status']!='Pending':raise HTTPException(409,'Request has already been reviewed')
+        if int(request['employee_id'])==int(user['id']):raise HTTPException(403,'You cannot approve your own official-details request')
+        if body.decision=='Rejected' and len(body.review_note.strip())<5:
+            raise HTTPException(422,'Rejection requires a review note')
+        if body.decision=='Approved':
+            row=conn.execute('''SELECT id,code,name,email,work_email,designation,department,location,
+              work_mode,join_date FROM employees WHERE id=? AND account_active=1''',(request['employee_id'],)).fetchone()
+            if row is None:raise HTTPException(409,'Employee account is inactive or unavailable')
+            baseline=json.loads(request['baseline_json'])
+            if _official_snapshot(row)!=baseline:
+                raise HTTPException(409,'Official details changed since the request was submitted; reject it and ask the employee to resubmit')
+            values={**baseline,**json.loads(request['payload_json'])}
+            patch=AccountProfileEdit(**{**values,'email':row['email'],'change_reason':request['change_reason']})
+            apply_official_profile_change(conn,int(request['employee_id']),patch,user['id'])
+        change=conn.execute('''UPDATE official_work_detail_requests SET status=?,reviewed_by=?,reviewed_at=?,review_note=?
+            WHERE id=? AND status='Pending' ''', (body.decision,user['id'],utcnow(),body.review_note.strip(),request_id))
+        if change.rowcount!=1:raise HTTPException(409,'Already reviewed')
+        audit(conn,user['id'],'profile.official_change.'+body.decision.lower(),f'official_work_detail_request:{request_id}',
+              'Employee '+str(request['employee_id']))
+        inform(conn,int(request['employee_id']),'Official work details reviewed',
+               'Your requested official work details were '+body.decision.lower()+'.')
         return {'status':body.decision,'request_id':request_id}
 
 

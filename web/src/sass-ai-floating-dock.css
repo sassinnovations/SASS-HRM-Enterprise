@@ -1,0 +1,89 @@
+/* SASS HRM floating AI assistant — no dock, reserved rail, page dimmer or scroll lock. */
+.sass-ai-floating-root{position:static;flex:0 0 0;width:0;height:0;min-width:0;pointer-events:none}
+.sass-ai-floating-root>*{pointer-events:auto}
+.sass-ai-floating-launcher{
+  position:fixed;right:max(18px,env(safe-area-inset-right));bottom:max(20px,env(safe-area-inset-bottom));
+  z-index:35;display:flex;flex-direction:column;justify-content:center;align-items:center;
+  width:64px;height:64px;border-radius:23px;border:1px solid #a5a7f3;
+  background:linear-gradient(140deg,#485ce0,#7854ce);color:#fff;
+  box-shadow:0 12px 30px #3548a558,0 3px 9px #27316c22;cursor:pointer;
+  transition:transform .15s ease,box-shadow .15s ease;
+}
+.sass-ai-floating-launcher:hover{transform:translateY(-3px);box-shadow:0 15px 33px #3548a569}
+.sass-ai-floating-launcher.active{background:linear-gradient(140deg,#4755b9,#6d58b8)}
+.sass-ai-floating-launcher span{font-weight:900;font-size:10px;line-height:1.1;letter-spacing:.14em}
+.sass-ai-floating-launcher:focus-visible,.sass-ai-floating-controls button:focus-visible,.sass-ai-floating-titlebar:focus-visible{outline:3px solid #f0a94e;outline-offset:3px}
+.sass-ai-floating-window{
+  position:fixed;right:max(18px,env(safe-area-inset-right));bottom:98px;
+  z-index:34;width:min(440px,calc(100vw - 26px));height:min(700px,calc(100dvh - 122px));
+  min-width:320px;min-height:320px;max-width:calc(100vw - 16px);max-height:calc(100dvh - 100px);
+  background:#fff;border:1px solid #cfd8ec;border-radius:19px;
+  box-shadow:0 18px 60px #1e2c5060,0 0 0 1px #f8faff;
+  display:flex;flex-direction:column;overflow:hidden;resize:both;isolation:isolate;
+}
+.sass-ai-floating-window.closed{display:none}
+.sass-ai-floating-window.maximized{left:12px!important;top:12px!important;right:12px!important;bottom:12px!important;width:auto;height:auto;max-width:none;max-height:none;resize:none}
+.sass-ai-floating-titlebar{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;
+  background:#f5f7ff;border-bottom:1px solid #e0e5f4;min-height:55px;flex:none;
+  cursor:grab;touch-action:none;user-select:none;
+}
+.sass-ai-floating-titlebar:active{cursor:grabbing}
+.sass-ai-floating-title{display:flex;align-items:center;gap:8px;min-width:0;color:#283a60;font-weight:850;font-size:13px;white-space:nowrap}
+.sass-ai-floating-title svg{color:#5b5ed7;flex:none}
+.sass-ai-floating-title small{font-size:9px;font-weight:700;color:#6572a0;letter-spacing:.04em}
+.sass-ai-floating-controls{display:flex;align-items:center;gap:5px;flex:none}
+.sass-ai-move-hint{color:#8591b5;margin-right:3px}
+.sass-ai-floating-controls button{display:grid;place-items:center;width:32px;height:31px;border-radius:9px;border:1px solid #dce3f6;background:#fff;color:#5967a0;cursor:pointer}
+.sass-ai-floating-controls button:hover{background:#e8edff}
+.sass-ai-floating-content{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}
+.sass-ai-floating-window .sass-ai-v2{max-width:none;width:100%;margin:0;padding:12px 14px 22px}
+.sass-ai-floating-window .sass-ai-hero{padding:13px 14px;gap:10px;margin-bottom:13px;border-radius:11px;box-shadow:none}
+.sass-ai-floating-window .sass-ai-hero h2{font-size:16px;letter-spacing:-.2px}
+.sass-ai-floating-window .sass-ai-hero p{font-size:10px;line-height:1.45}
+.sass-ai-floating-window .sass-ai-eyebrow{font-size:8px;letter-spacing:.6px}
+.sass-ai-floating-window .sass-ai-logo{height:34px;width:34px;border-radius:11px;flex-shrink:0}
+.sass-ai-floating-window .sass-ai-logo svg{width:20px;height:20px}
+.sass-ai-floating-window .sass-ai-indicator{display:none}
+.sass-ai-floating-window .sass-ai-tabs{gap:5px;display:flex;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin;padding-bottom:7px;margin-bottom:8px}
+.sass-ai-floating-window .sass-ai-tabs button{flex-shrink:0;font-size:10px;padding:9px 10px;min-height:36px}
+.sass-ai-floating-window .sass-ai-tabs button svg{width:14px;height:14px}
+.sass-ai-floating-window .sass-ai-chat-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+.sass-ai-floating-window .sass-ai-panel{min-width:0;border-radius:12px}
+.sass-ai-floating-window .sass-ai-chat-head{padding:12px}
+.sass-ai-floating-window .sass-ai-thread{min-height:220px;max-height:330px;padding:12px;gap:10px}
+.sass-ai-floating-window .sass-ai-msg{max-width:100%;gap:6px}
+.sass-ai-floating-window .sass-ai-msg-body{padding:9px 10px;font-size:11px}
+.sass-ai-floating-window .sass-ai-msg-icon{width:24px;height:24px;font-size:9px}
+.sass-ai-floating-window .sass-ai-compose{padding:10px;gap:7px}
+.sass-ai-floating-window .sass-ai-compose input{padding:9px;font-size:11px}
+.sass-ai-floating-window .sass-ai-compose button{padding:10px}
+.sass-ai-floating-window .sass-ai-info{padding:13px}
+.sass-ai-floating-window .sass-ai-suggestions{grid-template-columns:1fr 1fr}
+.sass-ai-floating-window .sass-ai-suggestions button{padding:9px;font-size:10px}
+.sass-ai-floating-window .sass-ai-directory{padding:12px}
+.sass-ai-floating-window .sass-ai-directory-head{display:block}
+.sass-ai-floating-window .sass-ai-directory-head input{min-width:0;width:100%;margin-top:9px}
+.sass-ai-floating-window .sass-ai-feature-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.sass-ai-floating-window .sass-ai-feature{padding:10px;min-width:0}
+.sass-ai-floating-window .sass-ai-feature>div:last-child{flex-wrap:wrap}
+.sass-ai-floating-window .sass-ai-form-panel{padding:12px}
+.sass-ai-floating-window .sass-ai-action-form{grid-template-columns:minmax(0,1fr);gap:10px}
+.sass-ai-floating-window .sass-ai-action-form .wide{grid-column:1}
+.sass-ai-floating-window .sass-ai-form-panel>p{font-size:11px}
+.sass-ai-floating-window .sass-ai-footer{font-size:10px;padding:0 3px}
+.sass-ai-floating-window .sass-ai-feature strong,.sass-ai-floating-window .sass-ai-feature small,.sass-ai-floating-window .sass-ai-suggestions button{overflow-wrap:anywhere}
+.sass-ai-sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+/* Small viewports: floating window is non-modal and the HRM remains scrollable behind it. */
+@media (max-width:820px){
+ .sass-ai-floating-launcher{width:57px;height:57px;border-radius:19px;right:max(12px,env(safe-area-inset-right));bottom:max(12px,env(safe-area-inset-bottom))}
+ .sass-ai-floating-window:not(.maximized){left:8px!important;right:8px!important;top:auto!important;bottom:80px!important;width:auto;height:min(680px,calc(100dvh - 104px));min-width:0;min-height:240px;resize:none}
+ .sass-ai-floating-window .sass-ai-v2{padding:12px}
+ .sass-ai-floating-window .sass-ai-hero{padding:10px}
+ .sass-ai-move-hint{display:none}
+}
+@media (max-width:420px){
+ .sass-ai-floating-window .sass-ai-feature-grid,.sass-ai-floating-window .sass-ai-suggestions{grid-template-columns:1fr}
+ .sass-ai-floating-title small{display:none}
+}
+@media (prefers-reduced-motion:reduce){.sass-ai-floating-launcher{transition:none}}

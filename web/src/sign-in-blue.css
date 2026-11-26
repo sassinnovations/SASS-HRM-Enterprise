@@ -1,0 +1,45 @@
+/* Shared sign-in blue. Keep semantic status, warning and destructive colors. */
+:root{
+  --brand-blue:#5a5fe9;
+  --brand-blue-hover:#484cc8;
+  --brand-blue-text:#373ba9;
+  --brand-blue-wash:#eef0ff;
+  --brand-blue-border:#cbd0ff;
+  --sass-primary:var(--brand-blue);
+  --sass-primary-hover:var(--brand-blue-hover);
+  --sass-primary-soft:var(--brand-blue-wash);
+  --sass-focus:var(--brand-blue);
+  --sw-accent:var(--brand-blue);
+  --sw-accent-soft:var(--brand-blue-wash);
+}
+.shell :is(.btn.primary,.gd-action.gd-primary,.dq-primary,.sdh-primary,.wc-primary,.wf-primary,
+.jd-primary,.asc-primary,.sass-ai-primary,.sass-ai-compose button,.rm-primary,.hiring-primary,
+.hr-search-primary,.ce-primary,.profile-primary,.ps-primary,.compops-primary,.candidate-btn.primary,
+.ex-primary,.exc-primary,.pay-primary,.org-primary,.ssh-primary,.attm-primary,.cset-primary,
+.am-primary,.es-primary,.sass-ai-floating-launcher),
+.login-shell .btn.primary{
+  background:var(--brand-blue);border-color:var(--brand-blue);color:#fff
+}
+.shell :is(.btn.primary,.gd-action.gd-primary,.dq-primary,.sdh-primary,.wc-primary,.wf-primary,
+.jd-primary,.asc-primary,.sass-ai-primary,.sass-ai-compose button,.rm-primary,.hiring-primary,
+.hr-search-primary,.ce-primary,.profile-primary,.ps-primary,.compops-primary,.candidate-btn.primary,
+.ex-primary,.exc-primary,.pay-primary,.org-primary,.ssh-primary,.attm-primary,.cset-primary,
+.am-primary,.es-primary,.sass-ai-floating-launcher):hover:not(:disabled),
+.login-shell .btn.primary:hover:not(:disabled){background:var(--brand-blue-hover);border-color:var(--brand-blue-hover)}
+.shell :is(.gd-tabs button[aria-pressed="true"], [role="tab"][aria-selected="true"],
+.rm-tabs button.active,.wc-tabs button.active,.ps-links button[aria-current="page"],
+nav[aria-label="Recruitment workflows"] .btn.outline:disabled),
+.shell .sidebar .nav-list :is(a.active,a[aria-current="page"]){
+  background:var(--brand-blue-wash);border-color:var(--brand-blue-border);
+  color:var(--brand-blue-text)
+}
+.shell nav[aria-label="Recruitment workflows"] .btn.outline:disabled{opacity:1}
+.content .page-header::before{background:var(--brand-blue)}
+.content .page-header .eyebrow,.sass-ai-v2 .sass-ai-eyebrow{color:var(--brand-blue-text)}
+.gd button:focus-visible,.gd select:focus-visible{outline-color:var(--brand-blue)}
+
+/* Borderless sign-in form */
+.login-shell .login-card:not(.signup-card),.login-shell .login-panel:has(.login-card:not(.signup-card)){border:0;box-shadow:none;background:transparent}
+
+/* Borderless inner signup form. Keep the outer panel and input/role-card borders. */
+.login-shell .login-card.signup-card{border:0;box-shadow:none;background:transparent}

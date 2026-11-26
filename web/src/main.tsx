@@ -2,6 +2,9 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './style.css';
+import './enterprise-white.css';
+import './botanical-white.css';
+import './sign-in-blue.css';
 
 /** Show an actionable error screen instead of an empty viewport if React crashes. */
 class AppErrorBoundary extends React.Component<
@@ -20,7 +23,7 @@ class AppErrorBoundary extends React.Component<
       return (
         <main className="sass-boot-failure" role="alert">
           <section>
-            <h1>SASS HRM could not display this screen</h1>
+            <h1>SASS HRM — SASS INNOVATIONS ENTERPRISE could not display this screen</h1>
             <p>The frontend hit a JavaScript rendering error. The error message is shown below, so the page will no longer fail silently.</p>
             <pre>{this.state.message}</pre>
             <p>Open developer tools with <strong>F12</strong>, select <strong>Console</strong>, and check the first red error for details.</p>

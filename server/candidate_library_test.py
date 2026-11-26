@@ -80,8 +80,9 @@ def main():
             assert get('admin','/options').json()['total']==0
             preview=get('admin','/clear-all/preview').json()
             assert preview['counts']['candidates']==0 and not preview['blocked'],preview
-            # Job choices are labels, not candidate records.
-            assert len(get('admin','/options').json()['roles'])>=29
+            # No preloaded role labels: the empty candidate database has zero roles.
+            assert get('admin','/options').json()['roles']==[]
+            assert get('admin','/options').json()['role_counts']=={}
             assert client.post(base+'/import',headers={**auth['admin'],'x-filename':'invalid.xlsx'},content=b'garbage').status_code==422
             assert get('admin','').json()['total']==0
             uploaded=client.post(base+'/import',headers={**auth['admin'],'x-filename':'synthetic.xlsx'},content=raw)
@@ -91,6 +92,7 @@ def main():
             assert get('manager',f'/imports/{batchid}/original').content==raw
             rows=get('manager','?sort=original&direction=asc&page_size=20').json()
             assert rows['total']==len(DATA) and [x['source_order'] for x in rows['items']]==list(range(1,len(DATA)+1))
+            assert set(get('admin','/options').json()['roles'])=={'Python Engineer','Data Analyst','Java Developer','Cloud Engineer'}
             assert rows['items'][0]['name']==rows['items'][1]['name'] and rows['items'][0]['id']!=rows['items'][1]['id']
             reverse=get('admin','?sort=original&direction=desc&page_size=3').json()
             assert [x['source_order'] for x in reverse['items']]==[6,5,4]
@@ -136,6 +138,8 @@ def main():
             assert result.status_code==200,result.text
             assert result.json()['total_candidates']==0 and result.json()['deleted_candidates']==len(DATA)
             assert get('admin','/options').json()['total']==0
+            assert get('admin','/options').json()['roles']==[]
+            assert get('admin','/options').json()['role_counts']=={}
             assert get('admin','/options').json()['imports']==[]
             assert get('admin','').json()['total']==0
             with backend.db() as conn:

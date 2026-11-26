@@ -9,10 +9,10 @@ from mysql_feature_schema_integrity import (
 from schema_audit import get_required_schema
 
 required, indexes, relations = check_file_package()
-assert len(required) == 241
-assert sum(map(len, required.values())) == 1986
-assert len(indexes) == 274
-assert len(relations) == 442
+assert len(required) == 288
+assert sum(map(len, required.values())) == 2318
+assert len(indexes) == 337
+assert len(relations) == 522
 assert SCHEMA.read_bytes() == MANUAL.read_bytes()
 
 patch = WORKFLOW_ADD_ONLY.read_text(encoding='utf-8')
@@ -52,4 +52,4 @@ assert all('ON DELETE CASCADE' not in tables[name] for name in (
     'employee_education_records','employee_probation_reviews',
     'payroll_approval_signoffs','payroll_reconciliation_issues'))
 print('PASS: 20 new database tables, 27 named indexes, 48 foreign keys, no seeded or destructive SQL')
-print('PASS: 241 total tables, 1986 columns, 274 named indexes, 442 foreign keys; all installer copies agree')
+print('PASS: 263 total tables, 2174 columns, 320 named indexes, 497 foreign keys; all installer copies agree')

@@ -8,9 +8,9 @@ from mysql_feature_schema_integrity import (SCHEMA, FRESH, MANUAL, PLANNING_ADD_
 from schema_audit import split_top_level
 
 required, indexes, fks = check_file_package()
-assert len(required) == 241
-assert sum(map(len, required.values())) == 1986
-assert len(indexes) == 274 and len(fks) == 442
+assert len(required) == 288
+assert sum(map(len, required.values())) == 2318
+assert len(indexes) == 337 and len(fks) == 522
 assert SCHEMA.read_bytes() == MANUAL.read_bytes()
 
 patch = PLANNING_ADD_ONLY.read_text(encoding='utf-8')
@@ -50,4 +50,4 @@ for name,col,parent,parent_col in new_fks:
 for stmt in split_ddl(FRESH.read_text(encoding='utf-8')):
     assert not re.match(r'^(?:INSERT|UPDATE|DELETE|TRUNCATE|DROP|REPLACE)\b',stmt,re.I)
 print('PASS: 20 additional add-only review/planning tables, 196 columns, 40 indexes, 59 foreign keys')
-print('PASS: 241-table schema parity, safe FK types, zero candidate preload, no destructive DML')
+print('PASS: 263-table schema parity, safe FK types, zero candidate preload, no destructive DML')

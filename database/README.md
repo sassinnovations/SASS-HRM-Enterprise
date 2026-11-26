@@ -1,3 +1,58 @@
+## Workspace views: 288-table schema
+
+See the [workspace controls and upgrade guide](../WORKSPACE_WORKFLOWS_RELEASE_NOTES.md). Migration 29 adds two account-owned view preference tables.
+
+---
+
+## Persistent workspace settings: 286-table schema
+
+See the [database links, update steps and testing guide](../WORKSPACE_PERSISTENT_SETTINGS_RELEASE_NOTES.md). Migration 28 adds six workspace tables.
+
+---
+
+## Workspace manual controls: 280-table schema
+
+See the [workspace upgrade and safe installation guide](../WORKSPACE_MANUAL_CONTROLS_RELEASE_NOTES.md). The eight new MySQL tables are additive.
+
+---
+
+# Current database release: 263 tables (18 November 2026) — SASS INNOVATIONS ENTERPRISE
+
+**Migration 21** (`21_RECRUITMENT_HR_OPERATIONS_ADD_ONLY.sql`) adds **20 linked,
+add-only MySQL foundation tables** for JD and candidate matching review metadata,
+onboarding, leave/attendance, payroll, receipt verification, stocktakes and
+integration quality. It does not implement user-facing screens or score persistence
+in the existing Candidate Search / Recruitment ATS feature. Existing job-description
+and candidate records are neither modified nor seeded.
+
+**Existing 243-table installations:** back up MySQL, confirm the current 243
+schema with the previous release checker, apply migration 21 on a staging database,
+then run `CHECK_MYSQL_263_TABLES.bat /LIVE` against the intended MySQL database.
+New empty databases use `02_FRESH_INSTALL_ALL_IN_ONE.sql` and should not run it
+against populated MySQL. No database volumes should be reset. MySQL CREATE TABLE
+is not transactional; plan a restore in case of partial deployment.
+
+No new JD/resume text is copied into these foundation tables. The additional
+foreign keys to JD records use `ON DELETE SET NULL` so a permanently deleted JD
+is not blocked by the new tables. Static schema checks are not proof of live
+MySQL installation or API/UI functionality.
+
+---
+
+# Current database release: 243 tables (18 November 2026)
+
+**Upgrade 20:** `20_RECRUITMENT_JD_LIBRARY_ADD_ONLY.sql` adds two new tables for
+job-description management and Excel/CSV import history. Candidate, employee,
+expense, payroll, asset, and job-opening tables are unchanged. No records are
+seeded or removed. The migration can be reapplied safely after confirming
+schema parity, but `IF NOT EXISTS` will not repair a mismatched table.
+
+Back up your existing database first, check that all 241 prior tables are
+installed, then apply migration 20 to that database. Run the read-only
+schema-audit checker. Never use the complete fresh-install SQL on an occupied
+database or reset MySQL volumes. For a brand-new empty database, use
+`02_FRESH_INSTALL_ALL_IN_ONE.sql`.
+
 # Current database release: 241 tables (17 November 2026)
 
 **Latest upgrade (19):** `19_EXPENSES_CLAIMS_SETTINGS_ADD_ONLY.sql` safely adds four

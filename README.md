@@ -1,3 +1,91 @@
+## Full checked White and Blue release
+
+Start with [the release and update guide](FULL_RELEASE_NOTES.md) for the borderless signup, first-admin launcher, and safe upgrade steps.
+
+---
+
+## Workspace workflow upgrades
+
+See the [workspace controls and upgrade guide](WORKSPACE_WORKFLOWS_RELEASE_NOTES.md). Migration 29 adds two account-owned view preference tables.
+
+---
+
+## Persistent workspace settings release
+
+See the [database links, update steps and testing guide](WORKSPACE_PERSISTENT_SETTINGS_RELEASE_NOTES.md). Migration 28 adds six workspace tables.
+
+---
+
+## Workspace manual controls release
+
+See the [workspace upgrade and safe installation guide](WORKSPACE_MANUAL_CONTROLS_RELEASE_NOTES.md). The eight new MySQL tables are additive.
+
+---
+
+## Service Center Plus release
+
+See [what changed, how it was tested, and staging instructions](SERVICE_CENTER_PLUS_RELEASE_NOTES.md).
+
+---
+
+## Consolidation release (based on V9)
+
+See [Consolidation release notes](CONSOLIDATION_RELEASE_NOTES.md) for the new HR Service Center, Recruitment Workspace, verification and safe deployment steps. No database migration is required for these changes.
+
+---
+
+## 25 November 2026 — Floating AI icon and window
+
+The SASS AI Copilot is now launched from a floating robot icon at the bottom-right of the HRM workspace. Its chat window is non-modal (no overlay/backdrop), desktop-draggable, keyboard-positionable, resizable, expandable and minimizable. The left sidebar and main HRM layout never shrink to make room for the bot. Chat and unfinished forms remain mounted while the window is minimized or while navigating features. Existing GenAI/RAG and confirmed HRM action APIs remain unchanged. See `AI_FLOATING_WINDOW_RELEASE_GUIDE.md` and run `CHECK_AI_FLOATING_BOT.bat` for source-level tests. Full frontend build and browser deployment still require verification.
+
+---
+
+# SASS HRM — SASS INNOVATIONS ENTERPRISE
+
+**24 November 2026 — AI Control Center v2:** The original AI Copilot now provides 73 role-filtered feature guides, nine confirmed and audited own-record operations, published-source lexical RAG, optional external GenAI, personal calendar CRUD and AI admin health monitoring. All other HRM edits/deletes remain in their own permission-checked modules. See [v2 source guide](docs/SASS_AI_COPILOT_GENAI_RAG_INSTALL.md) and [73-feature capability matrix](docs/AI_COPILOT_FEATURE_CONTROL_MATRIX_2026-11-24.csv). No live MySQL, external LLM or complete frontend build was verified.
+
+---
+
+
+**24 November 2026 — AI Control Center v2:** The original AI Copilot now provides 73 role-filtered feature guides, nine confirmed and audited own-record operations, published-source lexical RAG, optional external GenAI, personal calendar CRUD and AI admin health monitoring. All other HRM edits/deletes remain in their own permission-checked modules. See [v2 source guide](docs/SASS_AI_COPILOT_GENAI_RAG_INSTALL.md) and [73-feature capability matrix](docs/AI_COPILOT_FEATURE_CONTROL_MATRIX_2026-11-24.csv). No live MySQL, external LLM or complete frontend build was verified.
+
+---
+
+
+**24 November 2026 — AI Control Center v2:** The original AI Copilot now provides 73 role-filtered feature guides, nine confirmed and audited own-record operations, published-source lexical RAG, optional external GenAI, personal calendar CRUD and AI admin health monitoring. All other HRM edits/deletes remain in their own permission-checked modules. See [v2 source guide](docs/SASS_AI_COPILOT_GENAI_RAG_INSTALL.md) and [73-feature capability matrix](docs/AI_COPILOT_FEATURE_CONTROL_MATRIX_2026-11-24.csv). No live MySQL, external LLM or complete frontend build was verified.
+
+---
+
+
+**24 November 2026 — AI Copilot / GenAI / RAG release:** The existing AI Assistant has been extended with role-scoped navigation for all 73 inventoried feature pages, keyword RAG over published policies and administrator-published knowledge with citations, optional externally configured generative answers, personal read-only record lookups, and two explicitly confirmed and audited self-service actions (leave and Request Desk). The MySQL schema now contains **268** table definitions (+2 additive AI tables). Feature navigation does **not** give the AI autonomous control or full CRUD across all modules. See [AI Copilot installation and security guide](docs/SASS_AI_COPILOT_GENAI_RAG_INSTALL.md). A live MySQL connection, external LLM call, and complete frontend build have not been verified in this environment.
+
+---
+
+**24 November 2026 — Feature audit, consolidation and CRUD upgrade:** The existing 73 frontend pages and 413 API method/path definitions were inventoried and indexed through the centralized Administration settings center. Organization preferences now use one shared editor. The office directory and shift templates/schedules have audited Edit/Delete controls with dependent-record safeguards. Existing employee code editing (e.g. `SASS0047`) is retained. The 266-table MySQL schema remains unchanged, and no live records have been modified. See [Feature consolidation release guide](FEATURE_CONSOLIDATION_DEPLOYMENT_GUIDE.md) and [full audit report](FEATURE_AUDIT_AND_CONSOLIDATION_REPORT.md). Run `VERIFY_FEATURE_AUDIT_AND_CRUD.bat` for offline regression checks.
+
+---
+
+
+**23 November 2026 — Employee HRIS directory editor:** The **All employees → Edit** action now supports employee-code changes (for example `SASS0047`), official identity, emails, designation, department, office, work mode, joining date and reporting manager. Account Administration → Edit details also exposes staff code and joining date. HR-only validation, unique-code checks, reason logging, session revocation for email edits, and stable linked database IDs are retained. No live employee data is bundled or modified. [Upgrade and deployment guide](EMPLOYEE_DIRECTORY_CODE_EDIT_GUIDE.md). Run `VERIFY_EMPLOYEE_DIRECTORY_CODE_EDIT.bat` for isolated regression tests.
+
+---
+
+**Branding update · 18 November 2026**
+
+This source distribution is named **SASS HRM — SASS INNOVATIONS ENTERPRISE**.
+The login, mobile login, application sidebar, browser title, footer, API display name,
+account invitation/reset mail labels and payroll statement heading have been updated.
+The prior Saritha merge and Job Description Excel/ATS candidate matching features
+remain in the project. Database identifiers, SQL schema, API endpoints, JWT issuer,
+existing organization settings, Railway/Vercel configuration and user data are unchanged.
+
+**Schema:** 243 MySQL tables. **For existing installations:** do not run fresh-install
+SQL or reset database volumes. The name update itself needs no new migration.
+Deploy updated frontend/backend to make the new name visible on a hosted site.
+See `SASS_INNOVATIONS_ENTERPRISE_BRANDING_CHANGELOG.md` for exact scope.
+
+---
+
 # SASS HRM Enterprise — Saritha merged release (17 November 2026)
 
 This distribution starts from the newer SASS HRM Enterprise feature/database release and
@@ -108,7 +196,7 @@ The MySQL schema now includes 15 additional, non-destructive **data foundation**
 **No candidate Excel workbook or 7,435-row MySQL seed is shipped in this release.**
 Fresh installations have **zero candidates**, while all candidate search, Excel upload,
 CRUD, filtering, sorting, hiring stages, job-opening records and other HRM modules remain.
-The 29 job-role suggestions are retained, but they are *labels*, not applicants.
+The previously bundled 29 job-role suggestions have been removed. The candidate role dropdown derives only from records in MySQL and shows 0 when empty.
 
 **Existing MySQL data is never silently erased by installing this ZIP.** To intentionally
 clear your existing library, sign in as HR admin, open **Talent Management → Candidate
@@ -199,7 +287,7 @@ Added a separate administrator-only **Compensation settings** page (`/compensati
 **Upgrade note (v2.3):** See `docs/V2_3_CONNECTION_DIAGNOSTICS.md`. If the dashboard shows SQLite, run `DIAGNOSE_CONNECTION.bat`; the backend you are viewing may be an older test instance. Updated Company setup blocks MySQL-unverified profile saves and employee import, exposes the backend release version, and links to unfinished setup sections. No existing MySQL records are removed. Use original `.env` files and Docker database volume when upgrading.
 
 
-**Recommended local launch:** After installing Docker Desktop and configuring a fresh instance with `SETUP_SASS_HRM.bat`, run **`START_DOCKER_FULL.bat`** to launch the MySQL, FastAPI, and built React frontend containers together. On a new empty MySQL database only, create your first administrator using `CREATE_ADMIN.bat` (local Python needed). Open **http://localhost:5173**. Run **`VERIFY_DOCKER_FULL.bat`** for health/proxy/schema checks, **`BACKUP_MYSQL.bat`** for a binary-safe backup, and **`VERIFY_EVERYTHING.bat`** for isolated API tests and a real frontend build.
+**Recommended local launch:** After installing Docker Desktop and configuring a fresh instance with `SETUP_SASS_HRM.bat`, run **`START_DOCKER_FULL.bat`** to launch the MySQL, FastAPI, and built React frontend containers together. On a new empty MySQL database only, create your first administrator using `CREATE_ADMIN.bat` (uses the running Docker API container; no Windows Python needed). Open **http://localhost:5173**. Run **`VERIFY_DOCKER_FULL.bat`** for health/proxy/schema checks, **`BACKUP_MYSQL.bat`** for a binary-safe backup, and **`VERIFY_EVERYTHING.bat`** for isolated API tests and a real frontend build.
 
 **Existing deployments:** Keep the same persistent Docker volume and previously generated `.env` and `server/.env`; never rerun first-time setup, never reset passwords, and never use `docker compose down -v`. Back up and test restoration before making changes. The v2.4.0 distribution contains no `.env` files, secrets, databases or bundled `node_modules` (older v2.3.0 ZIP copies may contain exposed secrets).
 
@@ -262,9 +350,9 @@ A SASS-branded HRMS/HRIS application with **empty, organization-owned MySQL data
 Requirements: Python 3.11+, Node.js 20+, Docker Desktop with MySQL 8.4 image access. Extract to a new directory; do **not** overwrite your previous project or MySQL volume.
 
 1. Run **`SETUP_SASS_HRM.bat`**. It creates separate, cryptographically random database credentials and JWT signing key in ignored local `.env` files. It refuses to overwrite existing configuration.
-2. Run **`START_MYSQL.bat`** and wait for MySQL health check. The Compose project is named `sass_hrm_real` to avoid silently altering the old v1.0 database volume.
-3. Run **`CREATE_ADMIN.bat`**. The SASS work email is preset; supply your own administrator display name, employee code, location and a new secure password. The command works **only if the employee table is empty**. No default admin exists.
-4. Run **`START_HERE.bat`** and open `http://localhost:5173` after both windows are ready. Sign in with the real administrator credentials you created.
+2. Run **`START_DOCKER_FULL.bat`** and wait for the API and MySQL to be ready.
+3. Run **`CREATE_ADMIN.bat`**. Enter your work email, display name, employee code, and office location, then choose your own password at the hidden prompt. It works **only if the employee table is empty**. No default admin exists.
+4. Open `http://localhost:5173` and sign in with the administrator account you created.
 5. In Organization, create departments, holidays and announcements. In Leave Management, add the organization's leave categories and approved entitlements. In Policies, add approved handbook documents. In Employee HRIS, create employee profiles.
 6. Before sending invitations, edit `server/.env` and supply `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`. The invitations API uses TLS SMTP and **never sends an activation token to the browser**. Then use Account Provisioning to email invitation tokens to your staff.
 
@@ -319,10 +407,9 @@ The read-only AI assistant does not autonomously approve hiring, payroll or term
 **Not yet verified here:** actual MySQL 8.4 Docker startup, full `npm run build`, browser interactions, actual SMTP provider delivery, or production compliance/security. Use the supplied scripts on Windows before any real operational rollout.
 
 
-## SASS administrator + developer setup (v1.2)
+## SASS administrator and developer diagnostics
 
-Use `SETUP_SASS_HRM.bat`, then `START_MYSQL.bat`, then `CREATE_ADMIN.bat`, then `START_HERE.bat`.
-`CREATE_ADMIN.bat` provisions **one identity** for `satyanath.yalamanchili@sassinnovations.com` with the existing **HR administrator** role and a **separate, read-only developer diagnostics grant**. It asks for the administrator's display name, employee code, office location and a NEW password using a terminal prompt; it never includes a password in a ZIP, script, configuration template, or source file. The password must be at least 12 characters, with letters and digits.
+For a new empty database, start the full Docker stack before running `CREATE_ADMIN.bat`. It creates one HR administrator with the email supplied at the prompt. It does not grant developer diagnostics. See [administrator setup](docs/ADMIN_DEVELOPER_SETUP.md).
 
 The Developer console is shown only for users with a database-backed developer grant, and the server independently checks the grant on every diagnostics request. An ordinary employee or manager receives HTTP 403 even when manually calling the API. This grant does **not** provide a second shared login or unreviewed privilege escalation.
 
@@ -363,7 +450,7 @@ The updated SQL inventory is in [`database/README.md`](database/README.md). It c
 
 ## Candidate Search + complete MySQL Excel data package
 
-**CURRENT CLEAN RELEASE:** Prior candidate workbook and SQL seed were removed. You can add applicants or upload a NEW Excel workbook in Candidate Search; see `docs/EMPTY_CANDIDATE_LIBRARY.md`. The 29 job-role suggestions remain, but candidate count starts at zero for new databases.
+**CURRENT CLEAN RELEASE:** Prior candidate workbook and SQL seed were removed. You can add applicants or upload a NEW Excel workbook in Candidate Search; see `docs/EMPTY_CANDIDATE_LIBRARY.md`. No job-role suggestion list is preloaded. Candidate and job-role counts start at zero for new databases.
 
 ## Live verification for MySQL, secure uploads, payroll and browser delivery (11 Nov 2026)
 
@@ -412,3 +499,6 @@ schema is `database/02_FRESH_INSTALL_ALL_IN_ONE.sql`. See
 an existing MySQL deployment. No candidates, employees or payroll records are
 preloaded. No new application screens or data-processing features are enabled
 by the database expansion alone.
+
+### New: Excel & module data center (2026-11-24)
+HR Administrators can open **People Management → Excel & module data center** to download a curated 26-dataset Excel workbook, export approved module worksheets, create office locations/task templates/service categories by previewed Excel import, and open the existing feature's Add/Edit/Archive/Delete/Settings workflow. See `EXCEL_MODULE_DATA_CENTER_RELEASE_GUIDE.md` for tested scope, security rules, and staging rollout. A curated Excel workbook is not a full MySQL backup.
