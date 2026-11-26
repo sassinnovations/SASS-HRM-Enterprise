@@ -7,6 +7,11 @@ export const HRM_CONNECTION_LOST = 'sass-hrm:connection-lost';
 export const HRM_CONNECTION_RESTORED = 'sass-hrm:connection-restored';
 export const DEFAULT_API_TIMEOUT_MS = 25000;
 
+/** API payloads are sometimes objects or null. Screens must not call list methods on those. */
+export function asList<T>(value: unknown): T[] {
+  return Array.isArray(value) ? value.filter((item): item is T => item != null) : [];
+}
+
 let sessionEventToken: string | null = null;
 let connectionUnavailable = false;
 
