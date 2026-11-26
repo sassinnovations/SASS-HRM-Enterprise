@@ -8,6 +8,7 @@ assert version=='4.8.0'
 backend=(ROOT/'server/main.py').read_text()
 setup=(ROOT/'server/organization_setup.py').read_text()
 admin=(ROOT/'web/src/AdminSetup.tsx').read_text()
+importer=(ROOT/'web/src/DataQualityImporter.tsx').read_text()
 verification=(ROOT/'scripts/verify-docker-full.ps1').read_text()
 assert "version='4.8.0'" in backend and "'version':app.version" in backend
 assert "'backend_version':app.version" in setup
