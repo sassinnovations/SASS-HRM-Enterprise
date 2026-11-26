@@ -7,23 +7,39 @@ import './profile-center.css';
 type Profile={id:number;code:string;name:string;email:string;role:string;access_tier?:string;designation:string;department:string;location:string;work_mode:string;join_date:string;manager_id:number|null;preferred_name:string;headline:string;biography:string;work_phone:string;timezone:string;language:string;directory_visible:number|boolean;avatar_color:string;has_photo?:boolean;work_email?:string;profile_updated_at:string};
 type Row=Record<string,any>;
 type OfficialDraft={code:string;name:string;work_email:string;designation:string;department:string;location:string;work_mode:string;join_date:string;change_reason:string};
-function officialFromProfile(p:Profile):OfficialDraft{return {code:p.code,name:p.name,work_email:p.work_email||p.email,designation:p.designation,department:p.department,location:p.location,work_mode:p.work_mode,join_date:p.join_date.slice(0,10),change_reason:''}}
+function officialFromProfile(p:Profile):OfficialDraft{return {code:p.code,name:p.name,work_email:p.work_email||p.email,designation:p.designation,department:p.department,location:p.location,work_mode:p.work_mode||'Hybrid',join_date:(p.join_date||'').slice(0,10),change_reason:''}}
 type Draft={preferred_name:string;headline:string;biography:string;work_phone:string;timezone:string;language:string;directory_visible:boolean;avatar_color:string};
 const defaultDraft:Draft={preferred_name:'',headline:'',biography:'',work_phone:'',timezone:'Asia/Kolkata',language:'en',directory_visible:true,avatar_color:'#3C6DF0'};
+const API=(import.meta.env.VITE_API_URL||'').replace(/\/$/,'')+'/api';
 const timezones=['Asia/Kolkata','Asia/Dubai','America/New_York','America/Chicago','America/Los_Angeles','Europe/London','Europe/Berlin','Australia/Sydney','UTC'];
 const colors=['#3C6DF0','#5F5CEB','#0F766E','#B45309','#C0267B','#6B7280'];
-function initials(s:string){return s.trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase()||'HR'}
+function initials(s?:string|null){return String(s||'').trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase()||'HR'}
+function asRows(value:unknown):Row[]{return Array.isArray(value)?value.filter((row):row is Row=>!!row&&typeof row==='object'):[]}
+function asProfile(value:unknown):Profile|null{
+ if(!value||typeof value!=='object'||Array.isArray(value))return null;
+ const row=value as Partial<Profile>;
+ if(row.id==null)return null;
+ return {
+  id:Number(row.id),code:row.code||'',name:row.name||'',email:row.email||'',role:row.role||'',access_tier:row.access_tier,
+  designation:row.designation||'',department:row.department||'',location:row.location||'',work_mode:row.work_mode||'',
+  join_date:row.join_date||'',manager_id:row.manager_id??null,preferred_name:row.preferred_name||'',headline:row.headline||'',
+  biography:row.biography||'',work_phone:row.work_phone||'',timezone:row.timezone||'Asia/Kolkata',language:row.language||'en',
+  directory_visible:row.directory_visible??1,avatar_color:row.avatar_color||'#3C6DF0',has_photo:!!row.has_photo,
+  work_email:row.work_email||row.email||'',profile_updated_at:row.profile_updated_at||'',
+ };
+}
+function draftFrom(profile:Profile):Draft{return {preferred_name:profile.preferred_name||'',headline:profile.headline||'',biography:profile.biography||'',work_phone:profile.work_phone||'',timezone:profile.timezone||'Asia/Kolkata',language:profile.language||'en',directory_visible:profile.directory_visible!==0&&profile.directory_visible!==false,avatar_color:profile.avatar_color||'#3C6DF0'}}
 function dateLabel(date?:string){return date?new Date(date).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}):'Not configured'}
 async function api<T>(path:string,method='GET',payload?:unknown):Promise<T>{
  const token=sessionStorage.getItem('sass_token');
- const response=await hrmFetch('/api'+path,{method,headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},...(payload===undefined?{}:{body:JSON.stringify(payload)})});
+ const response=await hrmFetch(API+path,{method,headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},...(payload===undefined?{}:{body:JSON.stringify(payload)})});
  const raw=await response.json().catch(()=>null);
  if(!response.ok)throw new Error(typeof raw?.detail==='string'?raw.detail:`Request failed (HTTP ${response.status})`);
  return raw as T;
 }
 async function avatarRequest(path:string,method='GET',body?:Blob):Promise<Response>{
  const token=sessionStorage.getItem('sass_token');
- return hrmFetch('/api'+path,{method,headers:{...(token?{Authorization:`Bearer ${token}`}:{}),...(body?{'Content-Type':body.type}:{})},...(body?{body}:{})});
+ return hrmFetch(API+path,{method,headers:{...(token?{Authorization:`Bearer ${token}`}:{}),...(body?{'Content-Type':body.type}:{})},...(body?{body}:{})});
 }
 function ProfileAvatar({id,hasPhoto,color,name,small=false,revision=0}:{id:number;hasPhoto?:boolean;color:string;name:string;small?:boolean;revision?:number}){
  const [url,setUrl]=useState('');
@@ -57,13 +73,22 @@ export function MyProfile({navigate,onSaved}:{navigate:(page:string)=>void;onSav
  const [pictureRevision,setPictureRevision]=useState(0);const [saving,setSaving]=useState(false);const [loading,setLoading]=useState(true);const [error,setError]=useState('');const [success,setSuccess]=useState('');
  const load=useCallback(async()=>{
   setError('');setLoading(true);
-  try{const [me,people,changes,officialChanges]=await Promise.all([api<Profile>('/profile/me'),api<Row[]>('/profile/directory'),api<Row[]>('/profile/me/requests'),api<Row[]>('/profile/me/official-change-requests')]);
-   setProfile(me);setDraft({preferred_name:me.preferred_name,headline:me.headline,biography:me.biography,work_phone:me.work_phone,timezone:me.timezone,language:me.language,directory_visible:!!me.directory_visible,avatar_color:me.avatar_color});setDirectory(people);setRequests(changes);setOfficialRequests(officialChanges);
+  try{
+   const [meResult,people,changes,officialChanges]=await Promise.all([
+    api<unknown>('/profile/me').catch(()=>null),
+    api<unknown>('/profile/directory').catch(()=>[]),
+    api<unknown>('/profile/me/requests').catch(()=>[]),
+    api<unknown>('/profile/me/official-change-requests').catch(()=>[]),
+   ]);
+   const profile=asProfile(meResult)||asProfile(await api<unknown>('/auth/me').catch(()=>null));
+   if(!profile)throw new Error('Your profile could not be loaded. Use Refresh data to try again.');
+   setProfile(profile);setDraft(draftFrom(profile));setDirectory(asRows(people));setRequests(asRows(changes));setOfficialRequests(asRows(officialChanges));
+   if(!asProfile(meResult))setError('Professional profile details are unavailable. Official account details are shown instead.');
   }catch(e){setError((e as Error).message)}finally{setLoading(false)}
  },[]);
  useEffect(()=>{void load()},[load]);
  useRefreshData(load);
- const restoreDraft=()=>{if(profile)setDraft({preferred_name:profile.preferred_name,headline:profile.headline,biography:profile.biography,work_phone:profile.work_phone,timezone:profile.timezone,language:profile.language,directory_visible:!!profile.directory_visible,avatar_color:profile.avatar_color})};
+ const restoreDraft=()=>{if(profile)setDraft(draftFrom(profile))};
  async function uploadPhoto(file?:File){if(!file)return;
   setError('');setSuccess('');
   if(!['image/jpeg','image/png','image/webp'].includes(file.type)){setError('Please select a JPEG, PNG or WebP image.');return}
@@ -96,8 +121,9 @@ export function MyProfile({navigate,onSaved}:{navigate:(page:string)=>void;onSav
      ...officialDraft,email:profile.email
     });
     if(result.sessions_revoked){window.dispatchEvent(new Event(HRM_SESSION_EXPIRED));return}
-    const refreshed=await api<Profile>('/profile/me');
-    setProfile(refreshed);setDirectory(await api<Row[]>('/profile/directory'));
+    const refreshed=asProfile(await api<unknown>('/profile/me'));
+    if(refreshed){setProfile(refreshed);setDraft(draftFrom(refreshed))}
+    setDirectory(asRows(await api<unknown>('/profile/directory').catch(()=>[])));
     cancelOfficialEdit();await onSaved();
     setSuccess('Official work details saved to your employee record. Changes are audited.');
    }else{
@@ -107,9 +133,9 @@ export function MyProfile({navigate,onSaved}:{navigate:(page:string)=>void;onSav
    }
   }catch(e){setError((e as Error).message)}finally{setOfficialBusy(false)}
  }
- const visible=useMemo(()=>directory.filter(p=>`${p.name} ${p.preferred_name} ${p.department} ${p.designation} ${p.headline}`.toLowerCase().includes(filter.toLowerCase())),[directory,filter]);
+ const visible=useMemo(()=>asRows(directory).filter(p=>`${p.name||''} ${p.preferred_name||''} ${p.department||''} ${p.designation||''} ${p.headline||''}`.toLowerCase().includes(filter.toLowerCase())),[directory,filter]);
  async function save(e:React.FormEvent){e.preventDefault();setSaving(true);setSuccess('');setError('');
-  try{const result=await api<Profile>('/profile/me','PUT',draft);setProfile(result);await onSaved();setSuccess('Professional profile saved. Directory visibility changes take effect immediately.');setDirectory(await api<Row[]>('/profile/directory'))}catch(e){setError((e as Error).message)}finally{setSaving(false)}
+  try{const saved=asProfile(await api<unknown>('/profile/me','PUT',draft));if(saved){setProfile(saved);setDraft(draftFrom(saved))}await onSaved();setSuccess('Professional profile saved. Directory visibility changes take effect immediately.');setDirectory(asRows(await api<unknown>('/profile/directory').catch(()=>[])))}catch(e){setError((e as Error).message)}finally{setSaving(false)}
  }
  async function sendCorrection(e:React.FormEvent){e.preventDefault();setSaving(true);setError('');setSuccess('');
   try{await api('/profile/me/requests','POST',correction);setCorrection({requested_value:'',reason:''});setRequests(await api<Row[]>('/profile/me/requests'));setSuccess('Your official name-correction request was sent to HR for review.')}catch(e){setError((e as Error).message)}finally{setSaving(false)}
@@ -117,7 +143,7 @@ export function MyProfile({navigate,onSaved}:{navigate:(page:string)=>void;onSav
  return <div className="profile-center">
   <header className="profile-hero"><div><div className="profile-eyebrow">ACCOUNT / PROFESSIONAL IDENTITY</div><h1>My profile & settings</h1><p>Manage your professional identity, coworker visibility and official change requests in one place.</p></div></header>
   {error&&<Notice text={error} error/>}{success&&<Notice text={success}/>}{loading&&<p className="profile-helper">Loading your profile…</p>}
-  {profile&&<div className="profile-overview"><ProfileAvatar id={profile.id} hasPhoto={profile.has_photo} color={draft.avatar_color} name={draft.preferred_name||profile.name} revision={pictureRevision}/><div className="profile-person"><h2>{draft.preferred_name||profile.name}</h2><p>{profile.designation} · {profile.department}</p><span>{profile.email}</span></div><span className="profile-state"><ShieldCheck size={16}/> {(profile.access_tier==='hr_subadmin'?'HR SUB-ADMIN':profile.role==='admin'?'HR ADMINISTRATOR':profile.role.toUpperCase())} ACCOUNT</span></div>}
+  {profile&&<div className="profile-overview"><ProfileAvatar id={profile.id} hasPhoto={profile.has_photo} color={draft.avatar_color} name={draft.preferred_name||profile.name} revision={pictureRevision}/><div className="profile-person"><h2>{draft.preferred_name||profile.name}</h2><p>{profile.designation} · {profile.department}</p><span>{profile.email}</span></div><span className="profile-state"><ShieldCheck size={16}/> {(profile.access_tier==='hr_subadmin'?'HR SUB-ADMIN':profile.role==='admin'?'HR ADMINISTRATOR':(profile.role||'employee').toUpperCase())} ACCOUNT</span></div>}
   <nav aria-label="Profile views" className="profile-tabs"><button className={tab==='edit'?'chosen':''} onClick={()=>setTab('edit')}><UserRound size={17}/> My details</button><button className={tab==='directory'?'chosen':''} onClick={()=>setTab('directory')}><UsersRound size={17}/> Staff directory</button><button className={tab==='corrections'?'chosen':''} onClick={()=>setTab('corrections')}><FileClock size={17}/> Identity requests</button></nav>
   {profile&&tab==='edit'&&<div className="profile-two-col"><section className="profile-card"><div className="profile-card-heading"><h3>Professional profile</h3><span>Self-service</span></div>
    <div className="profile-photo-settings">
@@ -128,7 +154,7 @@ export function MyProfile({navigate,onSaved}:{navigate:(page:string)=>void;onSav
     </div>
    </div>
    <form onSubmit={save} className="profile-form"><div className="profile-fields-two"><Field title="Preferred display name"><input maxLength={80} value={draft.preferred_name} onChange={e=>setDraft(d=>({...d,preferred_name:e.target.value}))} placeholder={profile.name}/></Field><Field title="Professional headline"><input maxLength={140} value={draft.headline} onChange={e=>setDraft(d=>({...d,headline:e.target.value}))} placeholder="e.g. HR Operations Specialist"/></Field><Field title="Work contact number"><input maxLength={32} value={draft.work_phone} onChange={e=>setDraft(d=>({...d,work_phone:e.target.value}))} placeholder="Optional work number"/></Field><Field title="Timezone"><select value={draft.timezone} onChange={e=>setDraft(d=>({...d,timezone:e.target.value}))}>{timezones.includes(draft.timezone)?null:<option value={draft.timezone}>{draft.timezone}</option>}{timezones.map(t=><option key={t}>{t}</option>)}</select></Field><Field title="Preferred language (metadata)"><select value={draft.language} onChange={e=>setDraft(d=>({...d,language:e.target.value}))}>{[['en','English'],['hi','Hindi'],['te','Telugu'],['ta','Tamil'],['kn','Kannada']].map(([value,label])=><option value={value} key={value}>{label}</option>)}</select></Field></div><Field title="About me"><textarea rows={4} maxLength={750} value={draft.biography} onChange={e=>setDraft(d=>({...d,biography:e.target.value}))} placeholder="A short introduction for colleagues; do not include private or medical information."/></Field>
-    <div className="profile-colors"><span>Avatar color</span><div>{colors.map(c=><button key={c} type="button" style={{background:c}} className={draft.avatar_color.toUpperCase()===c.toUpperCase()?'selected':''} aria-label={`Use avatar color ${c}`} onClick={()=>setDraft(d=>({...d,avatar_color:c}))}/>)}</div></div>
+    <div className="profile-colors"><span>Avatar color</span><div>{colors.map(c=><button key={c} type="button" style={{background:c}} className={(draft.avatar_color||'#3C6DF0').toUpperCase()===c.toUpperCase()?'selected':''} aria-label={`Use avatar color ${c}`} onClick={()=>setDraft(d=>({...d,avatar_color:c}))}/>)}</div></div>
     <label className="profile-toggle"><input type="checkbox" checked={draft.directory_visible} onChange={e=>setDraft(d=>({...d,directory_visible:e.target.checked}))}/><span><strong>Show my professional profile in the staff directory</strong><small>Disabling this hides your optional professional profile details from colleagues. HR can still administer your employee record.</small></span></label>
     <div className="profile-edit-actions"><button type="submit" disabled={saving} className="profile-primary"><Save size={16}/> {saving?'Saving…':'Save profile changes'}</button><button type="button" className="profile-ghost" disabled={saving} onClick={restoreDraft}><Undo2 size={16}/> Discard unsaved edits</button></div>
    </form><div className="profile-reset"><p>Want to remove optional professional information? This will not remove your login, work email, role, or HR records.</p><button type="button" className="profile-ghost danger" disabled={saving} onClick={()=>void clearOptional()}><Trash2 size={16}/> Delete optional profile details</button></div></section><aside className="profile-card"><div className="profile-card-heading"><h3>Official work details</h3><button type="button" className="profile-ghost profile-official-trigger" disabled={officialBusy} onClick={editingOfficial?cancelOfficialEdit:beginOfficialEdit}>{editingOfficial?<><Undo2 size={15}/> Cancel</>:<><Pencil size={15}/> Edit official details</>}</button></div>
@@ -142,7 +168,7 @@ export function MyProfile({navigate,onSaved}:{navigate:(page:string)=>void;onSav
     <p className="profile-helper">{profile.role==='admin'?'As an HR Administrator, you can save official changes immediately. Work-email changes revoke your current session.':'As an Employee or HR Sub-Admin, your edits create an HR approval request; your current official record remains unchanged until approved.'} Your sign-in email, role and password cannot be changed here.</p>
     <div className="profile-edit-actions"><button type="submit" className="profile-primary" disabled={officialBusy}><Save size={16}/>{officialBusy?'Submitting…':profile.role==='admin'?'Save official details':'Submit for HR approval'}</button><button type="button" className="profile-ghost" disabled={officialBusy} onClick={cancelOfficialEdit}>Cancel</button></div>
    </form>:<div className="profile-details">{[['Employee code',profile.code],['Official name',profile.name],['Work email',profile.work_email||profile.email],['Role',profile.access_tier==='hr_subadmin'?'HR Sub-Admin':profile.role==='admin'?'HR Administrator':profile.role],['Department',profile.department],['Designation',profile.designation],['Office',profile.location],['Work mode',profile.work_mode],['Joined',dateLabel(profile.join_date)]].map(([label,value])=><div key={label}><span>{label}</span><strong>{value||'—'}</strong></div>)}</div>}
-   {officialRequests.length>0&&<div className="profile-official-history"><h4>My official-detail change requests</h4>{officialRequests.slice(0,5).map(request=><div key={request.id} className="profile-request-summary"><span className={'profile-pill '+request.status.toLowerCase()}>{request.status}</span><small>{dateLabel(request.requested_at)}</small><p>{Object.keys(request.requested_fields||{}).map(key=>key.replaceAll('_',' ')).join(', ')}</p>{request.review_note&&<small>HR: {request.review_note}</small>}</div>)}</div>}
+   {officialRequests.length>0&&<div className="profile-official-history"><h4>My official-detail change requests</h4>{officialRequests.slice(0,5).map(request=><div key={request.id} className="profile-request-summary"><span className={'profile-pill '+(request.status||'').toLowerCase()}>{request.status||'Pending'}</span><small>{dateLabel(request.requested_at)}</small><p>{Object.keys(request.requested_fields||{}).map(key=>key.replaceAll('_',' ')).join(', ')}</p>{request.review_note&&<small>HR: {request.review_note}</small>}</div>)}</div>}
    <div className="profile-note"><LockKeyhole size={19}/> Official employment fields require HR authorization. To change an account role, use Account administration; password changes are separate.</div>{profile.role==='admin'&&<div className="profile-shortcuts"><button type="button" onClick={()=>navigate('accounts')}><ShieldCheck size={16}/> Manage account roles <ArrowRight size={16}/></button></div>}
    <div className="profile-shortcuts"><button onClick={()=>navigate('settings')}><ShieldCheck size={16}/> Password and security <ArrowRight size={16}/></button><button onClick={()=>navigate('privateprofile')}><Phone size={16}/> Private emergency contacts <ArrowRight size={16}/></button></div></aside></div>}
   {tab==='directory'&&<section className="profile-card"><div className="profile-card-heading"><h3>Colleague directory</h3><span>{visible.length} visible</span></div><label className="profile-search"><Search size={17}/><input aria-label="Search professional directory" value={filter} onChange={e=>setFilter(e.target.value)} placeholder="Search by name, team or designation"/></label><div className="profile-directory">{visible.map(p=><article key={p.id}><ProfileAvatar id={p.id} hasPhoto={!!p.has_photo} color={p.avatar_color} name={p.preferred_name||p.name} small revision={pictureRevision}/><div><strong>{p.preferred_name||p.name}</strong><small>{p.designation} · {p.department}</small>{p.headline&&<p>{p.headline}</p>}{p.work_phone&&<small><Phone size={12}/> {p.work_phone}</small>}</div></article>)}{visible.length===0&&<div className="profile-empty">No matching profiles. Colleagues who opted out are not displayed.</div>}</div></section>}
@@ -154,11 +180,11 @@ export function ProfileManagement({navigate}:{navigate:(page:string)=>void}){
  const [people,setPeople]=useState<Row[]>([]);const [requests,setRequests]=useState<Row[]>([]);const [officialRequests,setOfficialRequests]=useState<Row[]>([]);
  const [query,setQuery]=useState('');const [status,setStatus]=useState('Pending');const [notes,setNotes]=useState<Record<number,string>>({});
  const [processing,setProcessing]=useState<number|null>(null);const [error,setError]=useState('');const[success,setSuccess]=useState('');const[loading,setLoading]=useState(true);
- const load=useCallback(async()=>{setError('');setLoading(true);try{const [p,r,o]=await Promise.all([api<Row[]>('/profile/admin/overview'),api<Row[]>('/profile/admin/requests'),api<Row[]>('/profile/admin/official-change-requests')]);setPeople(p);setRequests(r);setOfficialRequests(o)}catch(e){setError((e as Error).message)}finally{setLoading(false)}},[]);
+ const load=useCallback(async()=>{setError('');setLoading(true);try{const [p,r,o]=await Promise.all([api<unknown>('/profile/admin/overview').catch(()=>[]),api<unknown>('/profile/admin/requests').catch(()=>[]),api<unknown>('/profile/admin/official-change-requests').catch(()=>[])]);setPeople(asRows(p));setRequests(asRows(r));setOfficialRequests(asRows(o))}catch(e){setError((e as Error).message)}finally{setLoading(false)}},[]);
  useEffect(()=>{void load()},[load]);
  useRefreshData(load);
  const pending=requests.filter(r=>r.status==='Pending');
- const shown=useMemo(()=>people.filter(p=>`${p.name} ${p.email} ${p.department} ${p.role}`.toLowerCase().includes(query.toLowerCase())),[people,query]);
+ const shown=useMemo(()=>asRows(people).filter(p=>`${p.name||''} ${p.preferred_name||''} ${p.email||''} ${p.department||''} ${p.role||''}`.toLowerCase().includes(query.toLowerCase())),[people,query]);
  async function decide(id:number,decision:'Approved'|'Rejected'){setError('');setSuccess('');setProcessing(id);try{await api(`/profile/admin/requests/${id}/decision`,'POST',{decision,review_note:notes[id]||''});setNotes(old=>({...old,[id]:''}));await load();setSuccess(`Name correction ${decision.toLowerCase()}.`)}catch(e){setError((e as Error).message)}finally{setProcessing(null)}}
  async function decideOfficial(id:number,decision:'Approved'|'Rejected'){
   setError('');setSuccess('');setProcessing(id);
