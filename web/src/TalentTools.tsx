@@ -76,17 +76,19 @@ export function TalentTools({page,isHR,management,userId,candidates,employees,ti
     return json
   }
 
-  const filter=(items:Row[],keys:string[],statusKey='status')=>items.filter(item=>{
+  const rowsOf=(items:Row[]|null|undefined)=>Array.isArray(items)?items.filter((item):item is Row=>!!item&&typeof item==='object'):[]
+  const filter=(items:Row[]|null|undefined,keys:string[],statusKey='status')=>rowsOf(items).filter(item=>{
     const q=searchText.trim().toLowerCase()
     return (!q||keys.some(k=>String(item[k]??'').toLowerCase().includes(q)))&&
       (statusFilter==='All'||String(item[statusKey]??'')===statusFilter)
   })
   const optionsForFilter=(()=>{
-    const source:Row[]=page==='recruitment'?candidates:page==='onboarding'?onboarding:
-      page==='requestdesk'?requests:page==='helpdesk'?(queue.length?queue:tickets):
-      page==='offboarding'?offboarding:page==='interviews'?(interviewRows.length?interviewRows:interviews):tasks
+    if(!eligible.has(page))return ['All']
+    const source:Row[]=page==='recruitment'?rowsOf(candidates):page==='onboarding'?rowsOf(onboarding):
+      page==='requestdesk'?rowsOf(requests):page==='helpdesk'?(queue.length?rowsOf(queue):rowsOf(tickets)):
+      page==='offboarding'?rowsOf(offboarding):page==='interviews'?(interviewRows.length?rowsOf(interviewRows):rowsOf(interviews)):rowsOf(tasks)
     const key=page==='recruitment'?'stage':'status'
-    return ['All',...Array.from(new Set(source.map(x=>String(x[key]??'')).filter(Boolean))).sort()]
+    return ['All',...Array.from(new Set(source.map(x=>String(x?.[key]??'')).filter(Boolean))).sort()]
   })()
 
   const openModal=(kind:'candidate'|'template'|'task',item?:Row)=>{
@@ -113,14 +115,14 @@ export function TalentTools({page,isHR,management,userId,candidates,employees,ti
   }
 
 
-  const rosterOptions=useMemo(()=>employees.filter(e=>e.account_active!==0).map(e=>({id:String(e.id),label:`${e.name} · ${e.designation||e.role}`})),[employees])
-  const hrOptions=useMemo(()=>employees.filter(e=>e.role==='admin'&&e.account_active===1).map(e=>({id:String(e.id),label:`${e.name} · ${e.designation||'HR Administrator'}`})),[employees])
-  const currentCandidate=useMemo(()=>candidates.find(c=>String(c.id)===target),[candidates,target])
-  const currentRequest=useMemo(()=>requests.find(r=>String(r.id)===target),[requests,target])
-  const currentTicket=useMemo(()=>queue.find(r=>String(r.id)===target) || tickets.find(r=>String(r.id)===target),[queue,tickets,target])
-  const currentExit=useMemo(()=>offboarding.find(r=>String(r.id)===target),[offboarding,target])
-  const currentTask=useMemo(()=>tasks.find(r=>String(r.id)===target),[tasks,target])
-  const currentInterview=useMemo(()=>interviewRows.find(r=>String(r.id)===target) || interviews.find(r=>String(r.id)===target),[interviewRows,interviews,target])
+  const rosterOptions=useMemo(()=>rowsOf(employees).filter(e=>e.account_active!==0).map(e=>({id:String(e.id),label:`${e.name} · ${e.designation||e.role}`})),[employees])
+  const hrOptions=useMemo(()=>rowsOf(employees).filter(e=>e.role==='admin'&&e.account_active===1).map(e=>({id:String(e.id),label:`${e.name} · ${e.designation||'HR Administrator'}`})),[employees])
+  const currentCandidate=useMemo(()=>rowsOf(candidates).find(c=>String(c.id)===target),[candidates,target])
+  const currentRequest=useMemo(()=>rowsOf(requests).find(r=>String(r.id)===target),[requests,target])
+  const currentTicket=useMemo(()=>rowsOf(queue).find(r=>String(r.id)===target) || rowsOf(tickets).find(r=>String(r.id)===target),[queue,tickets,target])
+  const currentExit=useMemo(()=>rowsOf(offboarding).find(r=>String(r.id)===target),[offboarding,target])
+  const currentTask=useMemo(()=>rowsOf(tasks).find(r=>String(r.id)===target),[tasks,target])
+  const currentInterview=useMemo(()=>rowsOf(interviewRows).find(r=>String(r.id)===target) || rowsOf(interviews).find(r=>String(r.id)===target),[interviewRows,interviews,target])
 
   const load=async(selected=target)=>{
     setError('')

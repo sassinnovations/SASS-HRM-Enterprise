@@ -68,8 +68,8 @@ const today=()=>localDate(new Date());
 const nextMonth=()=>{const d=new Date();d.setMonth(d.getMonth()+1);return localDate(d)};
 const currency=(n:number)=>new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0}).format(n||0);
 const fmt=(s:string)=>{if(!s)return '—';let d=new Date(s.length===10?s+'T12:00:00':s);if(isNaN(d.getTime()))return s;const style=document.documentElement.dataset.hrDateFormat;return style==='YYYY-MM-DD'?d.toLocaleDateString('sv-SE'):style==='MM/DD/YYYY'?d.toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'numeric'}):d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})};
-const nameCaps=(s:string)=>s.split(' ').map(n=>n[0]||'').slice(0,2).join('').toUpperCase();
-const titleCase=(v:string)=>v.replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());
+const nameCaps=(s?:string|null)=>String(s||'SA').split(' ').map(n=>n[0]||'').slice(0,2).join('').toUpperCase();
+const titleCase=(v?:string|null)=>String(v??'').replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());
 const menus:MenuItem[]=[
  {key:'dashboard',label:'Overview',icon:LayoutDashboard},
  {key:'workcenter',label:'Action center',icon:ClipboardCheck},
@@ -575,8 +575,8 @@ function App(){
    if(token===sessionStorage.getItem('sass_token'))setData(previous=>({...previous,notifications}));
   }catch{/* The inbox remains usable; the shared refresh can retry the bell. */}
  },[]);
- const rowsFor=(key:string)=>data[key]||[];
- const scoped=(arr:Rec[])=>!search?arr:arr.filter(r=>Object.values(r).some(v=>String(v??'').toLowerCase().includes(search.toLowerCase())));
+ const rowsFor=(key:string)=>{const value=data[key];return Array.isArray(value)?value.filter((row):row is Rec=>!!row&&typeof row==='object'):[]};
+ const scoped=(arr:Rec[])=>{const rows=Array.isArray(arr)?arr.filter(row=>!!row&&typeof row==='object'):[];return !search?rows:rows.filter(r=>Object.values(r).some(v=>String(v??'').toLowerCase().includes(search.toLowerCase())))};
  const notify=(text:string,type:'success'|'error'='success')=>setToast({type,text});
  const action=async(path:string,method='POST',body?:unknown,success='Changes saved successfully')=>{
   setBusy(true);try{const result=await req<Rec>(path,method,body);notify(success);setDialog(null);

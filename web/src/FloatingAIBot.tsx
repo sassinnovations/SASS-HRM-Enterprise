@@ -1,4 +1,9 @@
 import React, {useEffect, useRef, useState} from 'react';
+class AIWidgetBoundary extends React.Component<{children: React.ReactNode},{failed:boolean}>{
+  state={failed:false};
+  static getDerivedStateFromError(){return {failed:true}}
+  render(){return this.state.failed?<p className="sass-ai-alert error" role="alert">SASS AI could not open. The rest of the workspace is still available.</p>:this.props.children}
+}
 import {Bot, Maximize2, Minimize2, Minus, Move} from 'lucide-react';
 import {SassAICopilot} from './SassAICopilot';
 
@@ -107,7 +112,7 @@ export function FloatingAIBot({
         </div>
       </div>
       <div className="sass-ai-floating-content">
-        <SassAICopilot user={user} navigate={navigate} activeFeatureKey={activeFeatureKey}/>
+        <AIWidgetBoundary><SassAICopilot user={user} navigate={navigate} activeFeatureKey={activeFeatureKey}/></AIWidgetBoundary>
       </div>
     </section>
     <span className="sass-ai-sr-only" role="status" aria-live="polite">{announce}</span>
