@@ -1,17 +1,16 @@
-# First SASS HRM administrator with developer diagnostics
+# First SASS HRM administrator and developer diagnostics
 
-This release preconfigures the nonsecret initial administrator email: **satyanath.yalamanchili@sassinnovations.com**. It does **not** preset a password or publish credential files. The previous password supplied in chat is too short (the minimum is 12 characters) and should not be reused.
+## Full Docker stack: first account only
 
-## Windows setup
+1. Start Docker Desktop and the configured project with `START_DOCKER_FULL.bat`. Use `SETUP_SASS_HRM.bat` **only for a new, unconfigured installation**. For upgrades, retain your existing `.env` files and MySQL volume.
+2. Check that `http://localhost:8000/api/ready` is ready. Run `CREATE_ADMIN.bat` from the same project folder, if approved by your Windows security policy.
+3. Confirm the displayed target database. Enter the intended work email, display name, employee code and office location. Choose a **new unique password** at the hidden prompt (12 or more characters with letters and digits). No password is supplied by the app.
+4. Open `http://localhost:5173` and sign in with the newly created HR administrator account.
 
-1. `SETUP_SASS_HRM.bat` to generate database and session signing secrets locally.
-2. `START_MYSQL.bat` to start a new MySQL 8.4 database. Wait for the health check.
-3. `CREATE_ADMIN.bat` to create one administrator. Supply a full display name, office location and a **new unique password** at the hidden terminal prompt. Passwords must contain 12 or more characters, including letters and digits.
-4. `START_HERE.bat`; sign in with the configured work email and your new password.
-5. In the sidebar, open **Developer console**. This shows only limited health/diagnostic data. HR administration remains available through the normal Admin screens.
+The batch uses the existing API container, checks MySQL, and refuses to run against a database that already contains employees. It does not grant developer diagnostics and does not install Windows Python or reset configuration. For a split local development setup, see the administrator CLI `server/create_admin.py --help` in the configured backend Python environment, and use it only via an approved procedure on a new, empty MySQL database.
 
-The bootstrap uses `--developer`, which stores a dedicated `developer_grants` permission associated with the administrator's employee record. The backend validates this grant on every read-only developer API request. Merely knowing the email does not grant access.
+**If Windows still blocks the batch:** Leave the protection enabled and follow your organization’s approved review or distribution process. A new ZIP does not make a batch trusted. Do not reset a populated database to get past the first-admin safeguard. Use the existing administrator or an authorized recovery path instead.
 
-**Existing database:** Bootstrap intentionally fails if the database already contains employees. Do not wipe an existing MySQL volume or change passwords with direct SQL. Use an authorized account migration/password reset procedure instead.
+## Developer diagnostics
 
-**Operational security:** Before real deployment, require MFA/SSO, signed configuration management, incident monitoring, independent security review and production database protection. No login has been created in your running MySQL server by producing this ZIP.
+Developer diagnostics is a separate permission, enforced by the backend. The launcher does not enable it by default. The separate CLI grant is intended only where expressly authorized. This app does not provision a shared password or a second login for diagnostics.

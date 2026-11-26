@@ -2,6 +2,7 @@ import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import type {FormEvent} from 'react';
 import {ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Download, Eye, FileSpreadsheet, Filter, LocateFixed, Pencil, Plus, Search, Trash2, UploadCloud, X} from 'lucide-react';
 import {hrmFetch} from './apiTransport';
+import {JobDescriptions} from './JobDescriptions';
 import {useRefreshData} from './useRefreshData';
 import './candidate-library.css';
 
@@ -37,7 +38,7 @@ async function candidateApi<T>(path:string,opts:RequestInit={}):Promise<T>{
 const dateDisplay=(v:any)=>String(v||'').slice(0,10)||'—';
 const display=(v:any)=>v===null||v===undefined||v===''?'—':String(v);
 
-export function CandidateLibrary(){
+export function CandidateLibrary({isHR,focusCandidateId}:{isHR:boolean;focusCandidateId?:number|null}){
   const [filters,setFilters]=useState<Filters>(defaultFilters);
   const [appliedFilters,setAppliedFilters]=useState<Filters>(defaultFilters);
   const [showAllFields,setShowAllFields]=useState(false);
@@ -97,6 +98,7 @@ export function CandidateLibrary(){
     catch(err){setError(err instanceof Error?err.message:'Unable to view candidate details')}
     finally{setBusy(false)}
   };
+  useEffect(()=>{if(focusCandidateId){void openViewer(focusCandidateId)}},[focusCandidateId]);
   const findCandidate=async()=>{
     setBusy(true);setError('');setNotice('');
     try{
@@ -230,18 +232,19 @@ export function CandidateLibrary(){
     <header className="candidate-library-header">
       <div><div className="candidate-eyebrow">TALENT MANAGEMENT / MYSQL CANDIDATE LIBRARY</div>
         <h1>Candidate Search & Database</h1>
-        <p>Search every imported candidate, combine job-relevant filters, edit records and preserve original Excel order.</p></div>
+        <p>Search actual MySQL candidates, combine job-relevant filters, edit records and preserve original Excel order. Job role choices appear only when candidates exist.</p></div>
       <div className="candidate-header-actions">
         {options.can_delete_imports&&(options.total>0||options.imports.length>0)&&<button type="button" className="candidate-btn danger" onClick={()=>void openClearAll()} disabled={busy}><Trash2 size={16}/> Clear all candidates</button>}
         <button type="button" className="candidate-btn primary" onClick={()=>void openEditor()} disabled={busy}><Plus size={16}/> Add candidate</button>
       </div>
     </header>
+    <JobDescriptions isHR={isHR} context="search" onOpenCandidate={id=>void openViewer(id)}/>
     <div className="candidate-stats"><div><span>Matching candidates</span><strong>{filteredCount.toLocaleString()}</strong></div>
       <div><span>Total candidates</span><strong>{options.total.toLocaleString()}</strong></div>
       <div><span>Excel import batches</span><strong>{options.imports.length.toLocaleString()}</strong></div></div>
     {error&&<div className="candidate-error" role="alert">{error}<button aria-label="Dismiss error" onClick={()=>setError('')}><X size={16}/></button></div>}
     {notice&&<div className="candidate-success" role="status">{notice}<button aria-label="Dismiss message" onClick={()=>setNotice('')}><X size={16}/></button></div>}
-    {options.total===0&&options.imports.length===0&&<p className="candidate-success" role="status">Candidate database is empty (0 records). Add a candidate or upload your own Excel workbook to begin.</p>}
+    {options.total===0&&options.imports.length===0&&<p className="candidate-success" role="status">Candidate database is empty: 0 candidates and 0 job roles. Add a candidate or upload an Excel workbook to begin.</p>}
     <section className="candidate-panel" aria-label="Excel import">
       <div className="candidate-panel-title"><FileSpreadsheet size={20}/><div><h2>Excel → MySQL Import</h2>
         <p>Import every row from the “All Candidates” sheet without removing duplicates. Every original worksheet and hyperlink is saved in a downloadable archive.</p></div></div>
@@ -329,7 +332,7 @@ export function CandidateLibrary(){
     </div></div>}
     {clearPreview&&<div className="candidate-overlay"><div className="candidate-dialog" role="dialog" aria-modal="true" aria-label="Clear entire candidate database">
       <h2>Clear all candidates from MySQL?</h2>
-      <p>This permanent operation removes <strong>{clearPreview.counts.candidates.toLocaleString()} candidates</strong>, <strong>{clearPreview.counts.import_batches.toLocaleString()} Excel import batches</strong>, their archived files and associated hiring-stage review history. It preserves employees, published payroll, job openings and the HR audit trail.</p>
+      <p>This permanent operation removes <strong>{clearPreview.counts.candidates.toLocaleString()} candidates</strong> and resets the Job role filter to <strong>0</strong>, <strong>{clearPreview.counts.import_batches.toLocaleString()} Excel import batches</strong>, their archived files and associated hiring-stage review history. It preserves employees, published payroll, job openings and the HR audit trail.</p>
       <p><strong>Back up your MySQL database before proceeding.</strong> This action cannot be undone from SASS HRM.</p>
       {clearPreview.blocked?<div className="candidate-error" role="alert">Deletion blocked: {clearPreview.counts.interviews} linked interview(s) and {clearPreview.counts.recruitment_activity} recruitment activity record(s) must be resolved first. No records have been deleted.</div>:
         <div className="candidate-clear-controls">

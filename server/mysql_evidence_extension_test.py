@@ -1,4 +1,4 @@
-"""Offline verification of the 217 -> 237 (current total 241) schema-only, add-only expansion.
+"""Offline verification of the 217 -> 237 (current total 263) schema-only, add-only expansion.
 
 Does not connect to MySQL, modify HR records or certify operational workflows.
 """
@@ -13,9 +13,9 @@ from mysql_feature_schema_integrity import (
 from schema_audit import split_top_level
 
 required, named_indexes, relations = check_file_package()
-assert len(required) == 241
-assert sum(map(len, required.values())) == 1986
-assert len(named_indexes) == 274 and len(relations) == 442
+assert len(required) == 288
+assert sum(map(len, required.values())) == 2318
+assert len(named_indexes) == 337 and len(relations) == 522
 assert SCHEMA.read_bytes() == MANUAL.read_bytes()
 
 statements = split_ddl(EVIDENCE_ADD_ONLY.read_text(encoding='utf-8'))
@@ -24,7 +24,7 @@ new_tables, new_indexes, new_relations, new_order = sql_objects(
 all_tables, _, _, all_order = sql_objects(SCHEMA.read_text(encoding='utf-8'))
 assert len(statements) == len(new_tables) == 20
 assert set(new_tables) == EVIDENCE_TABLES
-assert new_order == all_order[-24:-4]
+assert new_order == all_order[:all_order.index('official_work_detail_requests')][-52:-32]
 assert len(new_indexes) == 40 and len(new_relations) == 53
 assert new_indexes <= named_indexes and new_relations <= relations
 assert all(new_tables[name] == all_tables[name] for name in new_order)

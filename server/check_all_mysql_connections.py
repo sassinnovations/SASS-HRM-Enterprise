@@ -12,7 +12,7 @@ from mysql_backend import raw_mysql_connection
 
 def main(argv=None):
     parser = argparse.ArgumentParser()
-    parser.add_argument('--expected-database', default=os.getenv('MYSQL_DATABASE', 'sass_hrm'))
+    parser.add_argument('--expected-database', default=(os.getenv('MYSQL_DATABASE') or os.getenv('MYSQLDATABASE') or 'sass_hrm'))
     parser.add_argument('--probe-tables', action='store_true', help='Execute zero-row SELECT on all tables')
     args = parser.parse_args(argv)
     connection = None

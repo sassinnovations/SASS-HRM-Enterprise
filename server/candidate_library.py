@@ -14,7 +14,7 @@ import sqlite3
 import zipfile
 import xml.etree.ElementTree as ET
 from datetime import date, datetime, timedelta, timezone
-from pathlib import Path, PurePosixPath
+from pathlib import PurePosixPath
 from typing import Any, Literal
 
 from fastapi import Depends, HTTPException, Query, Request, Response
@@ -579,12 +579,8 @@ def candidate_filters(user=Depends(require_manager)):
                WHERE job_title IS NOT NULL AND job_title<>'' GROUP BY job_title''').fetchall()}
         result['educations'] = [r['item'] for r in conn.execute(
             "SELECT DISTINCT degree AS item FROM candidate_profiles WHERE degree IS NOT NULL AND degree<>'' ORDER BY degree").fetchall()]
-        # The bundled workbook's full job list is usable even before the first import.
-        # Counts always come from MySQL, never from the static catalog.
-        role_catalog = Path(__file__).resolve().parents[1] / 'imports' / 'candidate_role_catalog.json'
-        if role_catalog.is_file():
-            static_roles = json.loads(role_catalog.read_text(encoding='utf-8')).get('roles', [])
-            result['roles'] = sorted(set(result['roles']) | set(static_roles))
+        # Role options must reflect ONLY actual candidate rows. Never merge
+        # historical job-title suggestions: empty database => zero available roles.
         result['total'] = conn.execute('SELECT COUNT(*) AS n FROM candidates').fetchone()['n']
         result['can_delete_imports'] = user['role'] == 'admin'
         result['imports'] = [dict(r) for r in conn.execute('''

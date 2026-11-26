@@ -9,9 +9,9 @@ from mysql_feature_schema_integrity import (
 from schema_audit import split_top_level
 
 required, indexes, fks = check_file_package()
-assert len(required) == 241
-assert sum(map(len, required.values())) == 1986
-assert len(indexes) == 274 and len(fks) == 442
+assert len(required) == 288
+assert sum(map(len, required.values())) == 2318
+assert len(indexes) == 337 and len(fks) == 522
 assert SCHEMA.read_bytes() == MANUAL.read_bytes()
 assert len(OPERATIONAL_TABLES) == 20
 
@@ -56,4 +56,4 @@ for stmt in split_ddl(FRESH.read_text(encoding='utf-8')):
 assert 'CREATE TABLE IF NOT EXISTS employee_license_renewals' in SCHEMA.read_text(encoding='utf-8')
 assert 'CREATE TABLE IF NOT EXISTS employee_license_renewals' not in WORKFLOW_ADD_ONLY.read_text(encoding='utf-8')
 print('PASS: 20 add-only operational tables, 184 new columns, 40 named indexes, 59 foreign keys')
-print('PASS: 241-table schema parity, reference types, zero candidate seed and no destructive SQL')
+print('PASS: 263-table schema parity, reference types, zero candidate seed and no destructive SQL')

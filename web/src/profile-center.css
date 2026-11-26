@@ -76,3 +76,9 @@
 .profile-official-form .profile-fields-two{grid-template-columns:repeat(2,minmax(0,1fr))}
 .profile-official-form input[readonly]{color:#66758b;background:#f0f2f8;cursor:not-allowed}
 @media(max-width:650px){.profile-official-form .profile-fields-two{grid-template-columns:1fr}.profile-card-heading:has(.profile-official-trigger){flex-wrap:wrap}}
+
+.profile-official-history { margin-top: 16px; border-top: 1px solid var(--border, #e6e8f0); padding-top: 12px; }
+.profile-official-history h4 { font-size: 14px; margin: 0 0 12px; }
+.profile-request-summary { padding: 10px 0; border-bottom: 1px solid #e8ebf3; }
+.profile-request-summary small { margin-left: 8px; color: #65728d; }
+.profile-request-summary p { margin: 6px 0; font-size: 12px; text-transform: capitalize; }

@@ -13,7 +13,10 @@ menu=re.search(r'const menus:MenuItem\[\]=\[(.*?)\];',app,re.S)
 assert menu, 'Sidebar registry not found'
 keys=re.findall(r"\{key:'([^']+)'",menu.group(1))
 paths=dict(re.findall(r"^\s*([a-z][a-z0-9]*):\s*'(/[^']+)'",registry,re.M))
-assert set(paths)==set(keys),f'Missing page routes: {set(keys)-set(paths)}; unknown: {set(paths)-set(keys)}'
+# The floating assistant retains a compatible URL but intentionally has no sidebar entry.
+virtual = {'assistant'}
+assert set(paths)==set(keys)|virtual, f'Missing page routes: {(set(keys)|virtual)-set(paths)}; unknown: {set(paths)-(set(keys)|virtual)}'
+assert "if(key==='assistant'){setAiDockOpen(true)" in app, 'Floating assistant route handler missing' 
 assert len(set(paths.values()))==len(paths),'Two modules share a path'
 assert all(re.fullmatch(r'/[a-z]+/[a-z0-9]+(?:-[a-z0-9]+)*',url) for url in paths.values()),'Invalid route'
 assert not any(url.startswith('/api/') for url in paths.values()),'Client page overlaps API namespace'

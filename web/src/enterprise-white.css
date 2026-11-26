@@ -1,0 +1,103 @@
+/* Enterprise White: app-wide surfaces, typography and accents. Module layouts
+   and semantic states keep their existing styles and responsive behavior. */
+:root{
+  color-scheme:light;
+  --sass-page:#fff;
+  --sass-surface:#fff;
+  --sass-surface-soft:#f7f8fc;
+  --sass-border:#e0e6ef;
+  --sass-text:#18243b;
+  --sass-muted:#516078;
+  --sass-primary:#5942b8;
+  --sass-primary-hover:#49329e;
+  --sass-primary-soft:#f0ebfc;
+  --sass-focus:#654bca;
+  --sass-shadow:0 8px 30px #2336590a;
+  --sw-ink:#18243b;
+  --sw-muted:#516078;
+  --sw-accent:#5942b8;
+  --sw-accent-soft:#f0ebfc;
+  --sw-border:#dfe6ee;
+  --sw-shadow:0 8px 24px #20375a08;
+}
+html,body,#root,.shell,.main-area,.content,.page-content,.loading-screen,
+.topbar,.sidebar,.footer,.login-shell,.login-main,.sass-boot-failure {background:#fff}
+.topbar{border-bottom:1px solid var(--sw-border)}
+.sidebar{border-right-color:var(--sw-border);box-shadow:2px 0 14px #21385d05}
+.sidebar .workspace{background:#fff;border-color:var(--sw-border)}
+.sidebar .workspace small,.top-date,.sass-sync-note{color:var(--sw-muted)}
+.content .page-header{
+  position:relative;background:#fff;border:1px solid var(--sw-border);
+  border-radius:18px;margin:4px 0 21px;padding:clamp(16px,2.4vw,26px);
+  box-shadow:var(--sw-shadow);
+}
+.content .page-header::before{
+  content:"";position:absolute;top:16px;bottom:16px;left:-1px;width:3px;
+  background:#866df0;border-radius:4px;pointer-events:none
+}
+.content .page-header h1{color:var(--sw-ink);font-size:clamp(24px,3vw,33px);line-height:1.18;margin:6px 0}
+.content .page-header p{color:var(--sw-muted);font-size:13px;max-width:72ch}
+.content .page-header .eyebrow{color:var(--sw-accent);letter-spacing:.12em}
+.content .global-search{background:#fff;border-color:var(--sw-border);border-radius:12px}
+.content .global-search input{color:var(--sw-ink)}
+.page-content :where(.panel,.section-card,.sec-panel,.am-card,.attm-card,.candidate-panel,
+.cset-card,.compops-panel,.ce-panel,.cs-panel,.dq-panel,.es-card,.exc-panel,.ex-panel,.jd-import-panel,
+.jd-match-panel,.ops-card,.org-panel,.org-card,.pay-card,.pay-tax-card,.pay-review-panel,.ps-panel,
+.profile-card,.ssh-panel,.talent-panel,.rm-panel,.wf-panel,.wc-panel,.setup-card,.signup-panel){
+  background-color:#fff;border-color:var(--sw-border);box-shadow:var(--sw-shadow)
+}
+.page-content :is(.profile-overview,.dq-hero,.org-settings-hero,.ps-hero,.asc-summary,.welcome-banner){
+  background:#fff;border:1px solid var(--sw-border);border-radius:16px;box-shadow:var(--sw-shadow)
+}
+.page-content .section-heading h3{color:var(--sw-ink)}
+.page-content .section-heading p{color:var(--sw-muted)}
+.page-content :where(.table-scroll,.am-table-wrap,.candidate-library,.exc-panel,.jd-table-wrap,.ops-table-wrap,.sec-table-wrap){
+  scrollbar-color:#c1c9db #fff
+}
+.page-content :where(.table-scroll) thead th{
+  background:#f5f7fb;color:#465671;border-bottom:1px solid var(--sw-border)
+}
+.page-content :where(.table-scroll) tbody tr:hover td{background:#f8f7fe}
+.page-content .metric-line>div{background:#fff;border-color:var(--sw-border);box-shadow:var(--sw-shadow)}
+.page-content .metric-line>div span{color:var(--sw-muted)}
+.shell .btn.primary,.login-shell .btn.primary{background:var(--sw-accent);color:#fff;border-color:var(--sw-accent)}
+.shell .btn.primary:hover:not(:disabled),.login-shell .btn.primary:hover:not(:disabled){background:var(--sass-primary-hover)}
+.shell .btn.outline{background:#fff;border-color:#cdd7e6;color:#3c4b66}
+.shell .btn.outline:hover:not(:disabled){background:var(--sw-accent-soft);color:var(--sw-accent)}
+:where(.shell,.login-shell,.sass-boot-failure) :is(a,button,input,textarea,select,[tabindex]):focus-visible{
+  outline:2px solid var(--sass-focus);outline-offset:2px
+}
+.shell .modal-box,.shell .sass-route-panel,.shell .notifications-wrap .notification-popover{
+  background:#fff;border-color:var(--sw-border)
+}
+.shell .modal-box .modal-header{background:#fff;border-bottom-color:var(--sw-border)}
+/* Retain a branded desktop introduction without a dark background. */
+.login-shell .login-intro{
+  background:#fff;color:var(--sw-ink);border-right:1px solid var(--sw-border)
+}
+.login-shell .login-intro::before{
+  border-color:#ded5f2;box-shadow:0 0 0 80px #f8f5fe,0 0 0 155px #fbf9ff
+}
+.login-shell .login-brand .brand-icon{background:var(--sw-accent-soft);border:1px solid #ddd2f8;color:var(--sw-accent)}
+.login-shell .login-brand small,.login-shell .login-end,.login-shell .login-end span{color:var(--sw-muted)}
+.login-shell .login-statement h1 span{color:var(--sw-accent)}
+.login-shell .login-statement p,.login-shell .login-features{color:var(--sw-muted)}
+.login-shell .login-features svg{color:#076952}
+.login-shell .pill.inverse{background:var(--sw-accent-soft);border-color:#e4d9fa;color:var(--sw-accent)}
+.login-shell .pill.inverse .pulse-dot{background:#18846b}
+.login-shell .login-card,.login-shell .activation-card{
+  background:#fff;border:1px solid var(--sw-border);box-shadow:0 14px 36px #24395c0b
+}
+.login-shell .login-card :is(input:not([type=checkbox]),select,.login-password-field){background:#fff;color:var(--sw-ink)}
+/* AI assistant stays floating. Keep color on the small launcher and actions. */
+.shell .sass-ai-floating-window{background:#fff;border-color:var(--sw-border)}
+.shell .sass-ai-floating-titlebar{background:#fff;border-color:var(--sw-border)}
+.sass-ai-v2 .sass-ai-hero{background:#fff;color:var(--sw-ink);border:1px solid var(--sw-border);box-shadow:var(--sw-shadow)}
+.sass-ai-v2 .sass-ai-logo,.sass-ai-v2 .sass-ai-indicator{background:var(--sw-accent-soft);border-color:#dfd4f6;color:var(--sw-accent)}
+.sass-ai-v2 .sass-ai-eyebrow{color:var(--sw-accent)}
+.sass-ai-v2 .sass-ai-hero p,.sass-ai-v2 .sass-ai-chat-head small{color:var(--sw-muted)}
+.sass-ai-v2 .sass-ai-msg.user .sass-ai-msg-body{background:var(--sw-accent-soft);color:var(--sw-ink)}
+@media(max-width:600px){
+  .content .page-header{gap:12px;padding:15px 13px 15px 16px;border-radius:14px}
+  .content .page-header .header-right{max-width:100%}
+}

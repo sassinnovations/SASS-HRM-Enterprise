@@ -8,6 +8,7 @@ export const PAGE_ROUTES: Record<string, string> = {
   workcenter: '/workspace/action-center',
   globalsearch: '/workspace/global-search',
   dataquality: '/people/data-quality-center',
+  excelcenter: '/people/excel-data-center',
   reminders: '/workspace/workflow-reminders',
   coverage: '/workspace/team-leave-planner',
   selfservice: '/workspace/my-requests',
@@ -76,6 +77,8 @@ export const PAGE_ROUTES: Record<string, string> = {
 
   approvals: '/services/approval-inbox',
   assets: '/services/asset-management',
+  products: '/services/products',
+  projects: '/services/projects',
   documents: '/services/employee-documents',
   vault: '/services/secure-document-vault',
 

@@ -12,20 +12,23 @@ from pathlib import Path
 from schema_audit import field, get_required_schema
 from mysql_feature_schema_integrity import (
     sql_objects, SCHEMA, EXTENSION_TABLES, WORKFLOW_TABLES,
-    OPERATIONAL_TABLES, PLANNING_TABLES, CONTROL_TABLES, EVIDENCE_TABLES,
+    OPERATIONAL_TABLES, PLANNING_TABLES, CONTROL_TABLES, EVIDENCE_TABLES, OPERATIONS_21_TABLES,
+    WORKSPACE_MIGRATION_TABLES, WORKSPACE_SETTINGS_TABLES, WORKSPACE_VIEW_TABLES,
 )
 
 FOUNDATION_ONLY = (
     set(EXTENSION_TABLES) | set(WORKFLOW_TABLES) |
-    set(OPERATIONAL_TABLES) | set(PLANNING_TABLES) | set(CONTROL_TABLES) | set(EVIDENCE_TABLES)
-)
+    set(OPERATIONAL_TABLES) | set(PLANNING_TABLES) | set(CONTROL_TABLES) | set(EVIDENCE_TABLES) | set(OPERATIONS_21_TABLES)
+) - {'recruitment_match_runs','recruitment_match_results',
+     'recruitment_match_review_notes','candidate_shortlist_decisions'}
 CORE_MODULES = {
     'employees': ('employees', 'employee_skills', 'departments'),
     'attendance_and_leave': ('attendance', 'leave_requests', 'attendance_capture_events'),
     'payroll': ('salary_packages', 'pay_runs_v2', 'pay_items_v2'),
     'candidate_search': ('candidate_profiles', 'candidate_import_batches'),
-    'recruitment': ('jobs', 'hiring_stage_settings'),
+    'recruitment': ('jobs', 'hiring_stage_settings', 'recruitment_job_descriptions', 'jd_import_batches'),
     'documents': ('document_vault',),
+    'workspace_manual_controls': WORKSPACE_MIGRATION_TABLES + WORKSPACE_SETTINGS_TABLES + WORKSPACE_VIEW_TABLES,
     'settings_and_security': ('organization_preferences', 'audit_events', 'hr_data_quality_import_settings', 'hr_data_quality_import_history'),
 }
 

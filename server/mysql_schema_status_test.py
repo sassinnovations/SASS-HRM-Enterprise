@@ -15,8 +15,8 @@ try:
     fake=FakeMySQL(uppercase=True)
     mysql_backend.raw_mysql_connection=lambda:fake
     result=target.database_status(probe_tables=True,user={'id':1,'role':'admin'})
-    assert result['schema_complete'] and result['table_access_passed']==241
-    assert result['schema_only_table_count']==115
+    assert result['schema_complete'] and result['table_access_passed']==288
+    assert result['schema_only_table_count']==131
     assert fake.closed
     # Wrong schema fails closed; no migrations are attempted by this endpoint.
     mysql_backend.raw_mysql_connection=lambda:FakeMySQL(database='not_sass_hrm')

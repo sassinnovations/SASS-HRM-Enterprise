@@ -14,7 +14,7 @@ def database_status(probe_tables: bool = False, user=Depends(require_hr)):
         try:
             connection = raw_mysql_connection()  # Bypass mysql_db's schema installer.
             return inspect_mysql_connection(
-                connection, os.getenv('MYSQL_DATABASE', 'sass_hrm'), probe_tables=probe_tables
+                connection, (os.getenv('MYSQL_DATABASE') or os.getenv('MYSQLDATABASE') or 'sass_hrm'), probe_tables=probe_tables
             )
         except ValueError as exc:
             raise HTTPException(503, str(exc)) from exc

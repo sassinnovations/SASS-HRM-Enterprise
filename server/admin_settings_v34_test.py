@@ -31,12 +31,13 @@ with tempfile.TemporaryDirectory() as d:
         obj=dflt.json()
         assert obj['source']=='defaults'
         settings=obj['settings']
-        assert len(settings)==22,len(settings)
+        assert len(settings)==27,len(settings)
         assert settings['candidate_followup_days']==5
         assert put('emp34',settings).status_code==403
         assert put('mgr34',settings).status_code==403
         assert put('admin34',{**settings,'candidate_followup_days':0}).status_code==422
         assert put('admin34',{**settings,'asset_inventory_review_days':1000}).status_code==422
+        assert put('admin34',{**settings,'employee_voice_review_days':0}).status_code==422
         assert put('admin34',{**settings,'fake_admin_flag':True}).status_code==422
         assert put('admin34',{**settings,'recruiter_guidance':'A'*351}).status_code==422
         saved=put('admin34',{**settings,'candidate_followup_days':14,'helpdesk_triage_hours':4,'recruiter_guidance':'HR review required.'})
@@ -57,4 +58,4 @@ with tempfile.TemporaryDirectory() as d:
             assert len(actions)==1
             assert 'helpdesk_triage_hours' in actions[0]['details']
             assert 'HR review required.' not in actions[0]['details']
-        print('PASS v3.4: admin-only settings, 22 validated fields, MySQL-ready persistence, audit safety, overview privacy')
+        print('PASS v3.4: admin-only settings, 27 validated fields, MySQL-ready persistence, audit safety, overview privacy')

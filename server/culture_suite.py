@@ -381,19 +381,74 @@ class ServiceRequestDecision(BaseModel):
 
 
 @app.get('/api/request-desk/categories')
-def service_categories(user=Depends(current_user)):
+def service_categories(include_archived:bool=False,user=Depends(current_user)):
+    if include_archived and user['role']!='admin':
+        raise HTTPException(403,'Only HR administrators can view archived categories')
     with db() as c:
-        return rows(c.execute('SELECT * FROM service_categories WHERE active=1 ORDER BY name'))
+        return rows(c.execute('SELECT * FROM service_categories'+('' if include_archived else ' WHERE active=1')+' ORDER BY name'))
 
 
 @app.post('/api/request-desk/categories', status_code=201)
 def service_category_create(body: ServiceCategoryCreate, user=Depends(require_hr)):
     with db() as c:
-        if c.execute('SELECT id FROM service_categories WHERE name=?', (body.name,)).fetchone():
+        name=body.name.strip()
+        if len(name)<3:
+            raise HTTPException(422,'Category name must be at least 3 characters')
+        if c.execute('SELECT id FROM service_categories WHERE LOWER(name)=LOWER(?)', (name,)).fetchone():
             raise HTTPException(409, 'Category already exists')
-        rec = c.execute('INSERT INTO service_categories(name,description) VALUES(?,?)', (body.name,body.description))
+        rec = c.execute('INSERT INTO service_categories(name,description) VALUES(?,?)', (name,body.description.strip()))
         audit(c, user['id'], 'requestdesk.category.create', f'service_categories:{rec.lastrowid}')
         return {'id':rec.lastrowid}
+
+
+
+@app.put('/api/request-desk/categories/{category_id}')
+def service_category_edit(category_id:int,body:ServiceCategoryCreate,user=Depends(require_hr)):
+    name=body.name.strip()
+    if len(name)<3:
+        raise HTTPException(422,'Category name must be at least 3 characters')
+    with db() as c:
+        row=c.execute('SELECT id FROM service_categories WHERE id=?',(category_id,)).fetchone()
+        if not row: raise HTTPException(404,'Service category not found')
+        if c.execute('SELECT 1 FROM service_categories WHERE LOWER(name)=LOWER(?) AND id<>?',
+                     (name,category_id)).fetchone():
+            raise HTTPException(409,'Category already exists')
+        c.execute('UPDATE service_categories SET name=?,description=? WHERE id=?',
+                  (name,body.description.strip(),category_id))
+        audit(c,user['id'],'requestdesk.category.updated',f'service_categories:{category_id}')
+    return {'updated':True}
+
+
+class ServiceCategoryStatus(BaseModel):
+    active:bool
+
+
+@app.patch('/api/request-desk/categories/{category_id}/state')
+def service_category_state(category_id:int,body:ServiceCategoryStatus,user=Depends(require_hr)):
+    with db() as c:
+        if not c.execute('SELECT 1 FROM service_categories WHERE id=?',(category_id,)).fetchone():
+            raise HTTPException(404,'Service category not found')
+        c.execute('UPDATE service_categories SET active=? WHERE id=?',(int(body.active),category_id))
+        audit(c,user['id'],'requestdesk.category.state',f'service_categories:{category_id}',f'active={int(body.active)}')
+    return {'active':body.active}
+
+
+class ServiceCategoryDelete(BaseModel):
+    confirm:Literal['DELETE']
+    reason:str=Field(min_length=5,max_length=500)
+
+
+@app.delete('/api/request-desk/categories/{category_id}')
+def service_category_delete(category_id:int,body:ServiceCategoryDelete,user=Depends(require_hr)):
+    with db() as c:
+        row=c.execute('SELECT active FROM service_categories WHERE id=?',(category_id,)).fetchone()
+        if not row: raise HTTPException(404,'Service category not found')
+        if row['active']: raise HTTPException(409,'Archive the service type first')
+        if c.execute('SELECT 1 FROM service_requests WHERE category_id=? LIMIT 1',(category_id,)).fetchone():
+            raise HTTPException(409,'Service type has requests; keep it archived to preserve their history')
+        c.execute('DELETE FROM service_categories WHERE id=?',(category_id,))
+        audit(c,user['id'],'requestdesk.category.deleted',f'service_categories:{category_id}',body.reason.strip())
+    return {'deleted':True}
 
 
 @app.get('/api/request-desk/requests')

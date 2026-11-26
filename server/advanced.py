@@ -5,7 +5,7 @@ from datetime import date, datetime, timezone, timedelta
 import sqlite3
 from typing import Literal
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 
 from main import app, db, rows, current_user, require_hr, require_manager, audit, hash_password, valid_password
@@ -403,8 +403,49 @@ def approval_inbox(user=Depends(require_manager)):
                 [{'kind':'Offboarding','path':f'/offboarding/{x["id"]}',**x} for x in exits])
 
 
+def _official_calendar_range(user, start: date, end: date):
+    begin, finish = start.isoformat(), end.isoformat()
+    employee_id = user['id']
+    with db() as c:
+        leave = rows(c.execute("""SELECT start_date,end_date,leave_type,status FROM leave_requests
+          WHERE employee_id=? AND status IN ('Pending','Approved') AND start_date<=? AND end_date>=?
+          ORDER BY start_date,id""",(employee_id, finish, begin)))
+        schedule = rows(c.execute("""SELECT a.work_day AS day,'Shift' AS kind,s.name AS title,'Scheduled' AS status
+          FROM shift_assignments a JOIN shifts s ON s.id=a.shift_id
+          WHERE a.employee_id=? AND a.work_day BETWEEN ? AND ? ORDER BY a.work_day,a.id""",
+          (employee_id, begin, finish)))
+        holidays = rows(c.execute("""SELECT day,'Holiday' AS kind,name AS title,'Published' AS status
+          FROM holidays WHERE day BETWEEN ? AND ? AND (location='All' OR location=?) ORDER BY day,id""",
+          (begin, finish, user['location'])))
+        work_modes = rows(c.execute("""SELECT effective_date AS day,'Work mode' AS kind,requested_mode AS title,status
+          FROM work_mode_requests WHERE employee_id=? AND effective_date BETWEEN ? AND ?
+          ORDER BY effective_date,id""",(employee_id, begin, finish)))
+        interviews = []
+        if user['role'] in ('admin','manager'):
+            interviews = rows(c.execute("""SELECT substr(scheduled_at,1,10) AS day,
+              'Interview' AS kind,'Candidate interview' AS title,status FROM interviews
+              WHERE interviewer_id=? AND substr(scheduled_at,1,10) BETWEEN ? AND ?
+              ORDER BY scheduled_at,id""",(employee_id, begin, finish)))
+    leave_days = []
+    for entry in leave:
+        try:
+            first, last = max(start, date.fromisoformat(entry['start_date'])), min(end, date.fromisoformat(entry['end_date']))
+        except (TypeError, ValueError):
+            continue  # A malformed legacy date must not make the whole calendar unavailable.
+        for offset in range((last-first).days+1):
+            leave_days.append({'day':(first+timedelta(days=offset)).isoformat(), 'kind':'Leave',
+                               'title':entry['leave_type'], 'status':entry['status']})
+    return sorted(leave_days+schedule+holidays+work_modes+interviews,key=lambda item:(item['day'],item['kind'],item['title']))
+
+
 @app.get('/api/calendar/me')
-def my_calendar(user=Depends(current_user)):
+def my_calendar(response: Response, start: date | None = None, end: date | None = None, user=Depends(current_user)):
+    response.headers['Cache-Control'] = 'private, no-store'
+    if start is not None or end is not None:
+        if start is None or end is None or end < start or (end-start).days > 62:
+            raise HTTPException(422, 'Use a valid date range of up to 63 days.')
+        return _official_calendar_range(user, start, end)
+    # Keep the historical no-range contract for older clients and workspace summaries.
     with db() as c:
         myleave=rows(c.execute("SELECT start_date AS day,'Leave' AS kind,leave_type AS title,status FROM leave_requests WHERE employee_id=? AND status IN ('Pending','Approved') ORDER BY start_date LIMIT 100",(user['id'],)))
         shifts=rows(c.execute("SELECT a.work_day AS day,'Shift' AS kind,s.name AS title,'Scheduled' AS status FROM shift_assignments a JOIN shifts s ON s.id=a.shift_id WHERE a.employee_id=? ORDER BY a.work_day DESC LIMIT 100",(user['id'],)))

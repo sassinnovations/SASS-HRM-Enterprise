@@ -49,20 +49,108 @@ with tempfile.TemporaryDirectory() as tmp:
         assert get('/workspace/inbox',second).json()['unread_count']==1
         assert get('/workspace/inbox?filter=garbage',first).status_code==422
         assert get('/workspace/inbox?limit=5000',first).status_code==422
+        assert get('/workspace/inbox?limit=1&order=oldest',first).json()['items'][0]['id']==notification_one
+        assert get('/workspace/inbox?limit=1&order=oldest',first).json()['has_more']
+        assert not get('/workspace/inbox?limit=1&offset=1&order=oldest',first).json()['has_more']
+        assert get('/workspace/inbox?q=payROLL',first).json()['items'][0]['title']=='Pay notice'
+        assert get('/workspace/inbox?q=%25',first).json()['items']==[]
+        assert get('/workspace/inbox?q=Private',first).json()['items']==[]
+        bulk_path='/api/workspace/inbox/bulk'
+        def bulk(auth,action,ids):
+            return client.post(bulk_path,headers=auth,json={'action':action,'notification_ids':ids})
+        owned_ids=[x['id'] for x in inbox.json()['items']]
+        assert bulk({},'read',owned_ids).status_code==401
+        assert bulk(first,'read',[]).status_code==422
+        assert bulk(first,'read',[notification_one]*2).status_code==422
+        assert bulk(first,'read',[1]*51).status_code==422
+        assert bulk(first,'read',[0]).status_code==422
+        assert bulk(first,'read',[str(notification_one)]).status_code==422
+        assert bulk(first,'delete',owned_ids).status_code==422
+        assert bulk(admin,'read',owned_ids).status_code==404
+        assert bulk(first,'archive',[notification_one,other_notice]).status_code==404
+        assert get('/workspace/inbox?filter=archived',first).json()['items']==[]
+        assert bulk(first,'restore',owned_ids).status_code==409
+        assert bulk(first,'read',owned_ids).json()=={'selected':2,'updated':2}
+        assert bulk(first,'read',owned_ids).json()=={'selected':2,'updated':0}
+        assert bulk(first,'unread',owned_ids).json()=={'selected':2,'updated':2}
+        assert bulk(first,'archive',[notification_one]).json()=={'selected':1,'updated':1}
+        assert bulk(first,'read',owned_ids).status_code==409
+        assert get('/workspace/inbox',first).json()['unread_count']==1
+        assert bulk(first,'restore',owned_ids).status_code==409
+        assert bulk(first,'restore',[notification_one]).json()=={'selected':1,'updated':1}
+        assert bulk(first,'archive',owned_ids).json()=={'selected':2,'updated':2}
+        assert len(get('/workspace/inbox?filter=archived',first).json()['items'])==2
+        assert bulk(first,'restore',owned_ids).json()=={'selected':2,'updated':2}
+        assert get('/workspace/inbox',second).json()['unread_count']==1
         assert post(f'/workspace/inbox/{other_notice}/archive',first).status_code==403
         assert post(f'/workspace/inbox/{other_notice}/restore',first).status_code==403
         assert post(f'/workspace/inbox/{notification_one}/archive',first).status_code==200
+        assert post(f'/workspace/inbox/{notification_one}/unread',first).status_code==409
         assert get('/workspace/inbox',first).json()['unread_count']==1
         assert len(get('/workspace/inbox?filter=archived',first).json()['items'])==1
         assert post(f'/workspace/inbox/{notification_one}/restore',first).status_code==200
         assert get('/workspace/inbox',first).json()['unread_count']==2
         assert post('/workspace/inbox/read-all',first).json()['updated']==2
         assert get('/workspace/inbox?filter=unread',first).json()['items']==[]
+        assert post(f'/workspace/inbox/{other_notice}/unread',first).status_code==403
+        assert post(f'/workspace/inbox/{notification_one}/unread',first).status_code==200
+        assert get('/workspace/inbox?filter=unread',first).json()['items'][0]['id']==notification_one
         assert get('/workspace/inbox',second).json()['unread_count']==1
         prefs={'unread_only':True,'compact_view':True}
         assert put('/workspace/inbox/preferences',first,prefs).json()==prefs
         assert get('/workspace/inbox/preferences',second).json()=={'unread_only':False,'compact_view':False}
+        assert put('/workspace/inbox/preferences',first,{'unread_only':False,'compact_view':False}).json()=={'unread_only':False,'compact_view':False}
+        display_path='/workspace/inbox/display-defaults'
+        base_display={'notification_order':'newest','notification_page_size':25,'reminder_view':'open'}
+        custom_display={'notification_order':'oldest','notification_page_size':10,'reminder_view':'due'}
+        other_display={'notification_order':'newest','notification_page_size':50,'reminder_view':'upcoming'}
+        assert get(display_path,{}).status_code==401
+        assert get(display_path,first).json()==base_display
+        assert put(display_path,first,{**custom_display,'notification_page_size':100}).status_code==422
+        assert put(display_path,first,{**custom_display,'reminder_view':'past'}).status_code==422
+        assert put(display_path,first,{**custom_display,'employee_id':two}).json()==custom_display
+        assert get(display_path,first).json()==custom_display
+        assert get(display_path,second).json()==base_display
+        assert put(display_path,second,other_display).json()==other_display
+        assert client.delete('/api'+display_path,headers=first).json()==base_display
+        assert get(display_path,first).json()==base_display
+        assert get(display_path,second).json()==other_display
+        reminders='/workspace/inbox/reminders'
+        assert get(reminders,{}).status_code==401
+        def add(payload):
+            return client.post('/api'+reminders,headers=first,json=payload)
+        assert add({'title':'  '}).status_code==422
+        assert add({'title':'What date?','due_date':'2027-02-30'}).status_code==422
+        assert add({'title':'x'*121}).status_code==422
+        created=add({'title':'  Check open ticket  ','body':'Private notes','due_date':'2027-02-28','employee_id':two})
+        assert created.status_code==201,created.text
+        reminder=created.json()
+        assert reminder['title']=='Check open ticket' and reminder['is_done']==0
+        assert get(reminders+'?status=due&as_of=2027-02-27',first).json()['items']==[]
+        assert get(reminders+'?status=due&as_of=2027-02-28',first).json()['items'][0]['id']==reminder['id']
+        assert get(reminders+'?status=upcoming&as_of=2027-02-27',first).json()['items'][0]['id']==reminder['id']
+        assert get(reminders+'?status=upcoming&as_of=2027-02-28',first).json()['items']==[]
+        assert get(reminders+'?status=due&as_of=2027-02-28',second).json()['items']==[]
+        assert get(reminders+'?status=due&as_of=invalid',first).status_code==422
+        path=f"{reminders}/{reminder['id']}"
+        edit={'title':'Check ticket follow-up','body':'Keep reference','due_date':None}
+        assert get(reminders,second).json()['items']==[]
+        assert get(reminders,admin).json()['items']==[]
+        assert put(path,second,edit).status_code==404
+        assert client.patch('/api'+path+'/completion',headers=admin,json={'is_done':True}).status_code==404
+        assert client.delete('/api'+path,headers=second).status_code==404
+        assert put(path,first,edit).json()['title']==edit['title']
+        assert client.patch('/api'+path+'/completion',headers=first,json={'is_done':True}).json()['is_done']==1
+        assert get(reminders,first).json()['items']==[]
+        assert get(reminders+'?status=done',first).json()['items'][0]['body']=='Keep reference'
+        assert put(path,first,edit).json()['is_done']==1
+        assert client.patch('/api'+path+'/completion',headers=first,json={'is_done':False}).json()['is_done']==0
+        assert get(reminders,first).json()['items'][0]['due_date'] is None
+        assert get(reminders+'?status=due&as_of=2030-01-01',first).json()['items']==[]
+        assert client.delete('/api'+path,headers=first).status_code==200
+        assert get(reminders+'?status=all',first).json()['items']==[]
+        assert len(get('/workspace/inbox',first).json()['items'])==2
         with db() as c:
             count=c.execute("SELECT COUNT(*) AS n FROM audit_events WHERE action='workspace.settings.updated'").fetchone()['n']
             assert count==1
-    print('PASS v3.0 workspace: account scoping, inbox archive/restore/read, preferences, HR settings, validation, audit, overview')
+    print('PASS workspace: account scoping, single/bulk inbox actions and guards, search/sort/page, saved defaults, private reminder CRUD/due views, HR settings and audit')

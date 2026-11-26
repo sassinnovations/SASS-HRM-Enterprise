@@ -1,5 +1,5 @@
 import {hrmFetch} from './apiTransport';
-import {useRefreshData} from './useRefreshData';
+import {REFRESH_DATA_EVENT, useRefreshData} from './useRefreshData';
 import {useEffect, useMemo, useState} from 'react'
 import {
   BriefcaseBusiness, Headset, MessagesSquare, Route, Send, Settings2, Sparkles, UserCheck, ShieldCheck, ListChecks, CalendarClock,
@@ -201,6 +201,7 @@ export function TalentTools({page,isHR,management,userId,candidates,employees,ti
       await fn()
       await refreshCore()
       await load(target)
+      if(page==='requestdesk'||page==='helpdesk')window.dispatchEvent(new Event(REFRESH_DATA_EVENT))
       after?.()
       setNote('Saved successfully.')
     }catch(e:any){setError(e.message||'Action failed')}
@@ -333,7 +334,7 @@ export function TalentTools({page,isHR,management,userId,candidates,employees,ti
           <div className="talent-panel-head"><h4>Service request threads</h4><p>Select a request to view updates and continue the conversation.</p></div>
           <label className="talent-field"><span>Request</span><select value={target} onChange={e=>setTarget(e.target.value)}><option value="">Select request</option>{filter(requests,['subject','category_name','employee_name']).map(r=><option key={r.id} value={r.id}>#{r.id} · {r.subject} · {r.status}</option>)}</select></label>
           {currentRequest&&<div className="talent-details-card"><div className="talent-details-top"><strong>{currentRequest.subject}</strong><span className="talent-chip">{currentRequest.status}</span></div><p>{currentRequest.details}</p><small>{currentRequest.category_name} · updated {fmtDateTime(currentRequest.updated_at||currentRequest.created_at)}</small>{currentRequest.hr_response&&<div className="talent-note-box"><strong>Latest HR response</strong><p>{currentRequest.hr_response}</p></div>}</div>}
-          <label className="talent-field"><span>Message / response</span><textarea rows={4} value={message} onChange={e=>setMessage(e.target.value)} placeholder={isHR?'Add an internal HR reply or employee-facing update':'Reply or add a follow-up question'}/></label>
+          <label className="talent-field"><span>Message / response</span><textarea rows={4} value={message} onChange={e=>setMessage(e.target.value)} placeholder={isHR?'Write a reply visible to the employee':'Reply or add a follow-up question'}/></label>
           <div className="talent-actions multi">
             <button disabled={!target||message.trim().length<2||closed||busy} onClick={()=>act(()=>api(`/talent/request-desk/${target}/messages`,'POST',{message}),()=>setMessage(''))}><Send size={15}/> Send message</button>
             {isHR&&currentRequest?.employee_id!==userId&&currentRequest?.status==='Open'&&<button className="talent-secondary" disabled={busy} onClick={()=>act(()=>api(`/request-desk/requests/${target}/decision`,'POST',{status:'In Progress',hr_response:message||'Request is under review'}))}><Route size={14}/> Mark in progress</button>}
